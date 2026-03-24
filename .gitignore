@@ -5,11 +5,12 @@ obj/
 *.suo
 .vs/
 appsettings.Development.json
+appsettings.json
 
 # Angular
-web/node_modules/
-web/dist/
-web/.angular/
+web/caclouky-web/node_modules/
+web/caclouky-web/dist/
+web/caclouky-web/.angular/
 
 # General
 .DS_Store
