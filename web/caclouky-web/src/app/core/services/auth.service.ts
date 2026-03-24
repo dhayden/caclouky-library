@@ -1,8 +1,9 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, PLATFORM_ID, inject } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { tap } from 'rxjs/operators';
-import { environment } from '../../environments/environment';
+import { environment } from '../../../environments/environment';
 
 export interface AuthUser {
   id: string;
@@ -17,6 +18,7 @@ export class AuthService {
   private readonly TOKEN_KEY = 'library_token';
   private readonly USER_KEY = 'library_user';
   private readonly apiUrl = `${environment.apiUrl}/auth`;
+  private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
   currentUser = signal<AuthUser | null>(this.loadUser());
 
@@ -27,8 +29,10 @@ export class AuthService {
       `${this.apiUrl}/login`, { email, password }
     ).pipe(
       tap(res => {
-        localStorage.setItem(this.TOKEN_KEY, res.token);
-        localStorage.setItem(this.USER_KEY, JSON.stringify(res.user));
+        if (this.isBrowser) {
+          localStorage.setItem(this.TOKEN_KEY, res.token);
+          localStorage.setItem(this.USER_KEY, JSON.stringify(res.user));
+        }
         this.currentUser.set(res.user);
       })
     );
@@ -39,14 +43,16 @@ export class AuthService {
   }
 
   logout() {
-    localStorage.removeItem(this.TOKEN_KEY);
-    localStorage.removeItem(this.USER_KEY);
+    if (this.isBrowser) {
+      localStorage.removeItem(this.TOKEN_KEY);
+      localStorage.removeItem(this.USER_KEY);
+    }
     this.currentUser.set(null);
     this.router.navigate(['/login']);
   }
 
   getToken(): string | null {
-    return localStorage.getItem(this.TOKEN_KEY);
+    return this.isBrowser ? localStorage.getItem(this.TOKEN_KEY) : null;
   }
 
   isLoggedIn(): boolean {
@@ -61,6 +67,7 @@ export class AuthService {
   isStaff(): boolean { return this.hasRole('Staff') || this.isAdmin(); }
 
   private loadUser(): AuthUser | null {
+    if (!isPlatformBrowser(inject(PLATFORM_ID))) return null;
     const stored = localStorage.getItem(this.USER_KEY);
     return stored ? JSON.parse(stored) : null;
   }
