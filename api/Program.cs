@@ -99,6 +99,25 @@ using (var scope = app.Services.CreateScope())
     foreach (var role in new[] { "Admin", "Staff", "Member" })
         if (!await roleManager.RoleExistsAsync(role))
             await roleManager.CreateAsync(new IdentityRole(role));
+
+    // ── Dev-only book seed ────────────────────────────────────────────────────
+    if (app.Environment.IsDevelopment() && !db.Books.Any())
+    {
+        db.Books.AddRange(
+            new Book { ISBN="9780310903994", Title="The Purpose Driven Life",   Author="Rick Warren",     Publisher="Zondervan",        PublishedYear=2002, Genre="Christian Living",      TotalCopies=3, AvailableCopies=3, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780310903994-L.jpg", Description="A guide to discovering the meaning and purpose of your life through God's plan." },
+            new Book { ISBN="9780743261951", Title="The Case for Christ",        Author="Lee Strobel",     Publisher="Zondervan",        PublishedYear=1998, Genre="Christian Apologetics",  TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780743261951-L.jpg", Description="A former atheist journalist investigates the evidence for Jesus Christ." },
+            new Book { ISBN="9780785288008", Title="Mere Christianity",          Author="C.S. Lewis",      Publisher="HarperOne",        PublishedYear=1952, Genre="Christian Apologetics",  TotalCopies=3, AvailableCopies=3, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780785288008-L.jpg", Description="C.S. Lewis presents a rational case for the Christian faith." },
+            new Book { ISBN="9780060649890", Title="The Screwtape Letters",      Author="C.S. Lewis",      Publisher="HarperOne",        PublishedYear=1942, Genre="Christian Fiction",      TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780060649890-L.jpg", Description="A senior demon instructs a junior tempter on how to corrupt a human soul." },
+            new Book { ISBN="9781400202275", Title="Redeeming Love",             Author="Francine Rivers",  Publisher="Multnomah",        PublishedYear=1991, Genre="Christian Fiction",      TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9781400202275-L.jpg", Description="A powerful retelling of the story of Hosea set in the 1850s Gold Rush." },
+            new Book { ISBN="9780736957762", Title="Jesus Calling",              Author="Sarah Young",     Publisher="Thomas Nelson",    PublishedYear=2004, Genre="Devotional",             TotalCopies=3, AvailableCopies=3, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780736957762-L.jpg", Description="A devotional with messages from Jesus written in the first person." },
+            new Book { ISBN="9780802412867", Title="Knowing God",                Author="J.I. Packer",     Publisher="InterVarsity Press",PublishedYear=1973, Genre="Christian Theology",     TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780802412867-L.jpg", Description="A classic exploration of the nature and attributes of God." },
+            new Book { ISBN="9780764228919", Title="The Hiding Place",           Author="Corrie ten Boom", Publisher="Chosen Books",     PublishedYear=1971, Genre="Christian Biography",    TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780764228919-L.jpg", Description="The true story of Corrie ten Boom's survival in Nazi concentration camps." },
+            new Book { ISBN="9780802415851", Title="Desiring God",               Author="John Piper",      Publisher="Multnomah",        PublishedYear=1986, Genre="Christian Living",       TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780802415851-L.jpg", Description="John Piper's vision of Christian hedonism — God is most glorified when we are most satisfied in Him." },
+            new Book { ISBN="9780385508391", Title="The Pilgrim's Progress",     Author="John Bunyan",     Publisher="Penguin Classics",  PublishedYear=1678, Genre="Christian Classics",    TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780385508391-L.jpg", Description="An allegory of the Christian journey from the City of Destruction to the Celestial City." },
+            new Book { ISBN="9780449213445", Title="The Chosen",                 Author="Chaim Potok",     Publisher="Ballantine Books",  PublishedYear=1967, Genre="Christian Fiction",     TotalCopies=2, AvailableCopies=2, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780449213445-L.jpg", Description="A story of friendship between two Jewish boys in Brooklyn." }
+        );
+        await db.SaveChangesAsync();
+    }
 }
 
 if (app.Environment.IsDevelopment())
