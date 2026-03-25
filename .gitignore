@@ -12,6 +12,9 @@ web/caclouky-web/node_modules/
 web/caclouky-web/dist/
 web/caclouky-web/.angular/
 
+# Secrets
+.env
+
 # General
 .DS_Store
 *.log

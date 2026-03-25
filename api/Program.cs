@@ -89,9 +89,12 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// ── Seed roles ────────────────────────────────────────────────────────────────
+// ── Auto-migrate and seed roles ───────────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
+    var db = scope.ServiceProvider.GetRequiredService<LibraryDbContext>();
+    db.Database.Migrate();
+
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     foreach (var role in new[] { "Admin", "Staff", "Member" })
         if (!await roleManager.RoleExistsAsync(role))
