@@ -64,7 +64,8 @@ export class AuthService {
   }
 
   isAdmin(): boolean { return this.hasRole('Admin'); }
-  isStaff(): boolean { return this.hasRole('Staff') || this.isAdmin(); }
+  isMinister(): boolean { return this.hasRole('Minister'); }
+  isMinisterOrAdmin(): boolean { return this.isAdmin() || this.isMinister(); }
 
   private loadUser(): AuthUser | null {
     if (!isPlatformBrowser(inject(PLATFORM_ID))) return null;
