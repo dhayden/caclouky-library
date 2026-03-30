@@ -30,7 +30,7 @@ import { AuthService } from './core/services/auth.service';
         <a mat-button routerLink="/my/reservations" routerLinkActive="active-link">My Reservations</a>
       }
 
-      @if (auth.isStaff()) {
+      @if (auth.isMinisterOrAdmin()) {
         <a mat-button routerLink="/admin" routerLinkActive="active-link">Admin</a>
       }
 

@@ -44,7 +44,7 @@ export const routes: Routes = [
   // Admin / Staff
   {
     path: 'admin',
-    canActivate: [authGuard, roleGuard('Staff')],
+    canActivate: [authGuard, roleGuard('MinisterOrAdmin')],
     loadComponent: () => import('./features/admin/admin-shell/admin-shell.component').then(m => m.AdminShellComponent),
     children: [
       {

@@ -9,10 +9,10 @@ export const authGuard: CanActivateFn = () => {
   return router.createUrlTree(['/login']);
 };
 
-export const roleGuard = (requiredRole: 'Admin' | 'Staff'): CanActivateFn => () => {
+export const roleGuard = (requiredRole: 'Admin' | 'MinisterOrAdmin'): CanActivateFn => () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  const allowed = requiredRole === 'Staff' ? auth.isStaff() : auth.isAdmin();
+  const allowed = requiredRole === 'Admin' ? auth.isAdmin() : auth.isMinisterOrAdmin();
   if (allowed) return true;
   return router.createUrlTree(['/']);
 };
