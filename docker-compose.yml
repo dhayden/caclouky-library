@@ -4,14 +4,14 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
-      SA_PASSWORD: "CacloukyDB_2024!"
+      SA_PASSWORD: "${SA_PASSWORD}"
       MSSQL_PID: "Express"
     ports:
       - "1433:1433"
     volumes:
       - sqldata:/var/opt/mssql
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "CacloukyDB_2024!", "-Q", "SELECT 1", "-C"]
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${SA_PASSWORD}", "-Q", "SELECT 1", "-C"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -23,7 +23,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection: "Server=db;Database=CacloukyLibrary;User Id=sa;Password=CacloukyDB_2024!;TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=db;Database=CacloukyLibrary;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;"
       Jwt__Key: "${JWT_KEY}"
       Jwt__Issuer: "${JWT_ISSUER}"
       Jwt__Audience: "${JWT_AUDIENCE}"
