@@ -49,8 +49,9 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AdminOnly", p => p.RequireRole("Admin"));
-    options.AddPolicy("StaffOrAdmin", p => p.RequireRole("Admin", "Staff"));
+    options.AddPolicy("AdminOnly",        p => p.RequireRole("Admin"));
+    options.AddPolicy("MinisterOrAdmin",  p => p.RequireRole("Admin", "Minister"));
+    options.AddPolicy("AnyRole",          p => p.RequireRole("Admin", "Minister", "GeneralAssembly"));
 });
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    foreach (var role in new[] { "Admin", "Staff", "Member" })
+    foreach (var role in new[] { "Admin", "Minister", "GeneralAssembly" })
         if (!await roleManager.RoleExistsAsync(role))
             await roleManager.CreateAsync(new IdentityRole(role));
 

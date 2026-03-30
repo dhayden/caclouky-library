@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { BooksService, Book } from '../../../core/services/books.service';
 
 @Component({
@@ -14,7 +15,7 @@ import { BooksService, Book } from '../../../core/services/books.service';
   imports: [
     CommonModule, ReactiveFormsModule,
     MatDialogModule, MatButtonModule, MatInputModule,
-    MatSnackBarModule, MatProgressSpinnerModule
+    MatSnackBarModule, MatProgressSpinnerModule, MatCheckboxModule
   ],
   template: `
     <h2 mat-dialog-title>{{ isEdit ? 'Edit Book' : 'Add Book' }}</h2>
@@ -69,6 +70,12 @@ import { BooksService, Book } from '../../../core/services/books.service';
           <mat-label>Description</mat-label>
           <textarea matInput formControlName="description" rows="3"></textarea>
         </mat-form-field>
+
+        <div class="full restricted-row">
+          <mat-checkbox formControlName="isRestricted" color="warn">
+            Ministers Only (restricted book)
+          </mat-checkbox>
+        </div>
       </form>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
@@ -83,6 +90,7 @@ import { BooksService, Book } from '../../../core/services/books.service';
     .book-form { display: flex; flex-wrap: wrap; gap: 0 16px; padding-top: 8px; }
     .full { width: 100%; }
     .half { width: calc(50% - 8px); }
+    .restricted-row { padding: 8px 0 4px; }
   `]
 })
 export class BookFormDialogComponent implements OnInit {
@@ -110,7 +118,8 @@ export class BookFormDialogComponent implements OnInit {
       totalCopies: [this.data?.totalCopies ?? 1, [Validators.required, Validators.min(1)]],
       availableCopies: [this.data?.availableCopies ?? 1, [Validators.required, Validators.min(0)]],
       coverImageUrl: [this.data?.coverImageUrl ?? ''],
-      description: [this.data?.description ?? '']
+      description: [this.data?.description ?? ''],
+      isRestricted: [this.data?.isRestricted ?? false]
     });
   }
 

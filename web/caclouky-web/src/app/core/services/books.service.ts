@@ -14,6 +14,7 @@ export interface Book {
   coverImageUrl?: string;
   totalCopies: number;
   availableCopies: number;
+  isRestricted: boolean;
 }
 
 export interface BookSearchResult {

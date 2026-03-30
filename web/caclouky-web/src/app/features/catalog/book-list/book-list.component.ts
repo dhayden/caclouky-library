@@ -11,7 +11,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { BooksService, Book, BookSearchResult } from '../../../core/services/books.service';
+import { BooksService, BookSearchResult } from '../../../core/services/books.service';
 
 @Component({
   selector: 'app-book-list',
@@ -64,11 +64,18 @@ import { BooksService, Book, BookSearchResult } from '../../../core/services/boo
               <mat-card-content>
                 <h3 class="book-title">{{ book.title }}</h3>
                 <p class="book-author">{{ book.author }}</p>
-                @if (book.genre) {
-                  <mat-chip-set>
-                    <mat-chip>{{ book.genre }}</mat-chip>
-                  </mat-chip-set>
-                }
+                <div class="chip-row">
+                  @if (book.genre) {
+                    <mat-chip-set>
+                      <mat-chip>{{ book.genre }}</mat-chip>
+                    </mat-chip-set>
+                  }
+                  @if (book.isRestricted) {
+                    <mat-chip-set>
+                      <mat-chip color="warn" highlighted>Ministers Only</mat-chip>
+                    </mat-chip-set>
+                  }
+                </div>
                 <p class="availability"
                    [class.available]="book.availableCopies > 0"
                    [class.unavailable]="book.availableCopies === 0">
@@ -104,6 +111,7 @@ import { BooksService, Book, BookSearchResult } from '../../../core/services/boo
     .cover-placeholder { height: 180px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; }
     .cover-placeholder img { width: 100%; height: 100%; object-fit: cover; }
     .cover-placeholder mat-icon { font-size: 64px; width: 64px; height: 64px; color: #ccc; }
+    .chip-row { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
     .book-title { font-weight: 500; margin: 0 0 4px; font-size: 15px; line-height: 1.3; }
     .book-author { color: #666; font-size: 13px; margin: 0 0 8px; }
     .availability { font-size: 12px; font-weight: 500; margin: 8px 0 0; }
