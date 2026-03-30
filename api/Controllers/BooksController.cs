@@ -25,6 +25,9 @@ public class BooksController : ControllerBase
         var isMinisterOrAdmin = User.IsInRole("Admin") || User.IsInRole("Minister");
         var query = _db.Books.AsQueryable();
 
+        if (!isMinisterOrAdmin)
+            query = query.Where(b => !b.IsRestricted);
+
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(b =>
                 b.Title.Contains(search) ||
@@ -56,7 +59,10 @@ public class BooksController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var book = await _db.Books.FindAsync(id);
-        return book == null ? NotFound() : Ok(book);
+        if (book == null) return NotFound();
+        if (book.IsRestricted && !User.IsInRole("Admin") && !User.IsInRole("Minister"))
+            return NotFound();
+        return Ok(book);
     }
 
     // POST /api/books

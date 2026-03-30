@@ -14,7 +14,7 @@ public class ReservationsController : ControllerBase
 {
     private readonly LibraryDbContext _db;
     private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-    private bool IsStaffOrAdmin => User.IsInRole("Admin") || User.IsInRole("Staff");
+    private bool IsMinisterOrAdmin => User.IsInRole("Admin") || User.IsInRole("Minister");
 
     public ReservationsController(LibraryDbContext db) => _db = db;
 
@@ -24,7 +24,7 @@ public class ReservationsController : ControllerBase
     {
         var query = _db.Reservations.Include(r => r.Book).Include(r => r.User).AsQueryable();
 
-        if (!IsStaffOrAdmin)
+        if (!IsMinisterOrAdmin)
             query = query.Where(r => r.UserId == CurrentUserId);
 
         var result = await query
@@ -46,14 +46,16 @@ public class ReservationsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateReservationRequest req)
     {
         var book = await _db.Books.FindAsync(req.BookId);
-        if (book == null) return NotFound("Book not found.");
+        if (book == null) return NotFound(new { message = "Book not found." });
+        if (book.IsRestricted && !User.IsInRole("Admin") && !User.IsInRole("Minister"))
+            return StatusCode(403, new { message = "This book is for Ministers only." });
 
         var existing = await _db.Reservations.AnyAsync(r =>
             r.BookId == req.BookId &&
             r.UserId == CurrentUserId &&
             r.Status == ReservationStatus.Pending);
 
-        if (existing) return BadRequest("You already have an active reservation for this book.");
+        if (existing) return BadRequest(new { message = "You already have an active reservation for this book." });
 
         var reservation = new Reservation
         {
@@ -63,7 +65,7 @@ public class ReservationsController : ControllerBase
 
         _db.Reservations.Add(reservation);
         await _db.SaveChangesAsync();
-        return CreatedAtAction(null, new { id = reservation.Id }, reservation);
+        return Ok(new { id = reservation.Id, status = reservation.Status.ToString(), reservedAt = reservation.ReservedAt });
     }
 
     // PUT /api/reservations/5/cancel
@@ -72,8 +74,8 @@ public class ReservationsController : ControllerBase
     {
         var reservation = await _db.Reservations.FindAsync(id);
         if (reservation == null) return NotFound();
-        if (!IsStaffOrAdmin && reservation.UserId != CurrentUserId) return Forbid();
-        if (reservation.Status == ReservationStatus.Fulfilled) return BadRequest("Cannot cancel a fulfilled reservation.");
+        if (!IsMinisterOrAdmin && reservation.UserId != CurrentUserId) return Forbid();
+        if (reservation.Status == ReservationStatus.Fulfilled) return BadRequest(new { message = "Cannot cancel a fulfilled reservation." });
 
         reservation.Status = ReservationStatus.Cancelled;
         await _db.SaveChangesAsync();
@@ -81,7 +83,7 @@ public class ReservationsController : ControllerBase
     }
 
     // PUT /api/reservations/5/ready  (staff/admin — notify member)
-    [Authorize(Policy = "StaffOrAdmin")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}/ready")]
     public async Task<IActionResult> MarkReady(int id)
     {
