@@ -22,6 +22,7 @@ public class BooksController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        var isMinisterOrAdmin = User.IsInRole("Admin") || User.IsInRole("Minister");
         var query = _db.Books.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -42,7 +43,8 @@ public class BooksController : ControllerBase
             {
                 b.Id, b.ISBN, b.Title, b.Author, b.Genre,
                 b.PublishedYear, b.CoverImageUrl,
-                b.TotalCopies, b.AvailableCopies
+                b.TotalCopies, b.AvailableCopies,
+                b.IsRestricted
             })
             .ToListAsync();
 
@@ -58,7 +60,7 @@ public class BooksController : ControllerBase
     }
 
     // POST /api/books
-    [Authorize(Policy = "StaffOrAdmin")]
+    [Authorize(Policy = "MinisterOrAdmin")]
     [HttpPost]
     public async Task<IActionResult> Create(Book book)
     {
@@ -68,7 +70,7 @@ public class BooksController : ControllerBase
     }
 
     // PUT /api/books/5
-    [Authorize(Policy = "StaffOrAdmin")]
+    [Authorize(Policy = "MinisterOrAdmin")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, Book updated)
     {

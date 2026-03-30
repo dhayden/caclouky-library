@@ -13,6 +13,7 @@ public class Book
     public string? CoverImageUrl { get; set; }
     public int TotalCopies { get; set; } = 1;
     public int AvailableCopies { get; set; } = 1;
+    public bool IsRestricted { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Checkout> Checkouts { get; set; } = new List<Checkout>();

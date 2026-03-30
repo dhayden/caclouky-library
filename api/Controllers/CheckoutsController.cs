@@ -14,11 +14,11 @@ public class CheckoutsController : ControllerBase
 {
     private readonly LibraryDbContext _db;
     private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-    private bool IsStaffOrAdmin => User.IsInRole("Admin") || User.IsInRole("Staff");
+    private bool IsMinisterOrAdmin => User.IsInRole("Admin") || User.IsInRole("Minister");
 
     public CheckoutsController(LibraryDbContext db) => _db = db;
 
-    // GET /api/checkouts  (staff/admin: all | member: own)
+    // GET /api/checkouts  (minister/admin: all | general assembly: own)
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -27,7 +27,7 @@ public class CheckoutsController : ControllerBase
             .Include(c => c.User)
             .AsQueryable();
 
-        if (!IsStaffOrAdmin)
+        if (!IsMinisterOrAdmin)
             query = query.Where(c => c.UserId == CurrentUserId);
 
         var result = await query
@@ -43,14 +43,27 @@ public class CheckoutsController : ControllerBase
         return Ok(result);
     }
 
-    // POST /api/checkouts  (staff/admin only)
-    [Authorize(Policy = "StaffOrAdmin")]
+    // POST /api/checkouts  (minister/admin only — enforces restricted book rule)
+    [Authorize(Policy = "MinisterOrAdmin")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCheckoutRequest req)
     {
         var book = await _db.Books.FindAsync(req.BookId);
         if (book == null) return NotFound("Book not found.");
         if (book.AvailableCopies <= 0) return BadRequest("No copies available.");
+
+        // Restricted books can only be checked out for Minister or Admin users
+        if (book.IsRestricted)
+        {
+            var targetUser = await _db.Users.FindAsync(req.UserId);
+            if (targetUser == null) return NotFound("User not found.");
+            var userRoles = await _db.UserRoles
+                .Where(ur => ur.UserId == req.UserId)
+                .Join(_db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name)
+                .ToListAsync();
+            if (!userRoles.Contains("Admin") && !userRoles.Contains("Minister"))
+                return StatusCode(403, "This book is restricted to Ministers and Admins only.");
+        }
 
         book.AvailableCopies--;
         var checkout = new Checkout
@@ -66,7 +79,7 @@ public class CheckoutsController : ControllerBase
     }
 
     // PUT /api/checkouts/5/return
-    [Authorize(Policy = "StaffOrAdmin")]
+    [Authorize(Policy = "MinisterOrAdmin")]
     [HttpPut("{id:int}/return")]
     public async Task<IActionResult> Return(int id)
     {
