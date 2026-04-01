@@ -1,0 +1,68 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Build Angular ──────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/caclouky-web/package-lock.json
+
+      - name: Install Angular dependencies
+        working-directory: web/caclouky-web
+        run: npm ci
+
+      - name: Build Angular (production)
+        working-directory: web/caclouky-web
+        run: npx ng build --configuration production
+
+      # ── Copy Angular dist into API wwwroot ─────────────────────────────────
+      - name: Copy Angular dist to API wwwroot
+        run: |
+          mkdir -p api/wwwroot
+          cp -r web/caclouky-web/dist/caclouky-web/browser/. api/wwwroot/
+
+      # ── Build & Publish .NET API ───────────────────────────────────────────
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish API (linux-x64)
+        working-directory: api
+        run: dotnet publish -c Release -r linux-x64 --self-contained false -o ../publish
+
+      # ── Deploy to server ───────────────────────────────────────────────────
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p 2222 212.56.44.143 >> ~/.ssh/known_hosts
+
+      - name: Stop running app
+        run: |
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
+            "if [ -f ~/app/app.pid ]; then kill \$(cat ~/app/app.pid) 2>/dev/null || true; rm ~/app/app.pid; fi; echo stopped"
+
+      - name: Copy files to server
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p 2222" \
+            publish/ \
+            dhayden@212.56.44.143:/home/dhayden/app/
+
+      - name: Start app
+        run: |
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
+            "cd ~/app && JWT_KEY='${{ secrets.JWT_KEY }}' JWT_ISSUER='https://caclouky.org' JWT_AUDIENCE='https://caclouky.org' nohup dotnet CacloukyLibrary.dll --urls http://0.0.0.0:5000 > ~/app/app.log 2>&1 & echo \$! > ~/app/app.pid && echo started PID \$(cat ~/app/app.pid)"
