@@ -1,6 +1,6 @@
 # Caclouky Library
 
-A church library management system built with ASP.NET Core 8, Angular 18, and SQL Server.
+A church library management system built with ASP.NET Core 9, Angular 18, and SQL Server.
 
 ## Features
 
@@ -16,7 +16,7 @@ A church library management system built with ASP.NET Core 8, Angular 18, and SQ
 
 | Layer    | Technology                                              |
 |----------|---------------------------------------------------------|
-| API      | ASP.NET Core 8, Entity Framework Core, ASP.NET Identity |
+| API      | ASP.NET Core 9, Entity Framework Core, ASP.NET Identity |
 | Frontend | Angular 18 (SSR), Angular Material                     |
 | Database | SQL Server (Express for local dev)                     |
 | Auth     | JWT Bearer tokens, role-based policies                 |
@@ -46,7 +46,7 @@ The app will be available at **http://localhost**.
 
 ### Local Development (without Docker)
 
-**Requirements:** .NET 8 SDK, Node.js 20+, SQL Server Express
+**Requirements:** .NET 9 SDK, Node.js 20+, SQL Server Express
 
 1. **API**
    ```bash
@@ -89,7 +89,7 @@ All secrets live in a `.env` file (gitignored — never committed). Copy `.env.e
 
 ```
 caclouky-library/
-├── api/                    # ASP.NET Core 8 Web API
+├── api/                    # ASP.NET Core 9 Web API
 │   ├── Controllers/
 │   ├── Models/
 │   ├── Data/
