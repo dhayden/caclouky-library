@@ -67,9 +67,9 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 "
             cd ~/caclouky
-            export JWT_KEY='${{ secrets.JWT_KEY }}'
-            export JWT_ISSUER='https://caclouky.org'
-            export JWT_AUDIENCE='https://caclouky.org'
+            export Jwt__Key='${{ secrets.JWT_KEY }}'
+            export Jwt__Issuer='https://caclouky.org'
+            export Jwt__Audience='https://caclouky.org'
             export ASPNETCORE_URLS='http://0.0.0.0:5000'
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
