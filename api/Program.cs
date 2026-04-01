@@ -10,8 +10,14 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Database ──────────────────────────────────────────────────────────────────
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<LibraryDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    if (string.IsNullOrEmpty(connectionString))
+        options.UseSqlite("Data Source=caclouky.db");
+    else
+        options.UseSqlServer(connectionString);
+});
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -94,7 +100,10 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<LibraryDbContext>();
-    db.Database.Migrate();
+    if (string.IsNullOrEmpty(connectionString))
+        db.Database.EnsureCreated();
+    else
+        db.Database.Migrate();
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     foreach (var role in new[] { "Admin", "Minister", "GeneralAssembly" })
@@ -134,4 +143,10 @@ app.UseCors("LibraryCors");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// Serve Angular SPA static files (production)
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapFallbackToFile("index.html");
+
 app.Run();
