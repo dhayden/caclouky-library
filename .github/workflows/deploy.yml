@@ -71,6 +71,7 @@ jobs:
             export Jwt__Issuer='https://caclouky.org'
             export Jwt__Audience='https://caclouky.org'
             export ASPNETCORE_URLS='http://0.0.0.0:5000'
+            # Note: external port 6000 maps to internal port 5000 on this host
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
