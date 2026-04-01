@@ -76,10 +76,4 @@ jobs:
             echo started PID \$(cat ~/caclouky/app.pid)
           "
 
-      - name: Configure nginx proxy
-        run: |
-          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "printf 'server {\n  listen 80;\n  server_name caclouky.org www.caclouky.org;\n  location / {\n    proxy_pass http://127.0.0.1:5000;\n    proxy_http_version 1.1;\n    proxy_set_header Host \$host;\n    proxy_set_header X-Real-IP \$remote_addr;\n    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto \$scheme;\n  }\n}\n' | sudo tee /etc/nginx/sites-available/caclouky > /dev/null \
-            && sudo ln -sf /etc/nginx/sites-available/caclouky /etc/nginx/sites-enabled/caclouky \
-            && sudo nginx -t && sudo systemctl reload nginx && echo nginx configured"
 
