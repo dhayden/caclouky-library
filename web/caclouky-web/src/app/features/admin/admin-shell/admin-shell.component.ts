@@ -20,6 +20,10 @@ import { MatIconModule } from '@angular/material/icon';
             <mat-icon matListItemIcon>library_books</mat-icon>
             <span matListItemTitle>Books</span>
           </a>
+          <a mat-list-item routerLink="reservations" routerLinkActive="active-link">
+            <mat-icon matListItemIcon>bookmark</mat-icon>
+            <span matListItemTitle>Reservations</span>
+          </a>
           <a mat-list-item routerLink="checkouts" routerLinkActive="active-link">
             <mat-icon matListItemIcon>assignment_return</mat-icon>
             <span matListItemTitle>Checkouts</span>

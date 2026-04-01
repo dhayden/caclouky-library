@@ -61,6 +61,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/manage-members/manage-members.component').then(m => m.ManageMembersComponent)
       },
       {
+        path: 'reservations',
+        loadComponent: () => import('./features/admin/manage-reservations/manage-reservations.component').then(m => m.ManageReservationsComponent)
+      },
+      {
         path: 'checkouts',
         loadComponent: () => import('./features/admin/manage-checkouts/manage-checkouts.component').then(m => m.ManageCheckoutsComponent)
       },

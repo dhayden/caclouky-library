@@ -82,7 +82,7 @@ public class ReservationsController : ControllerBase
         return NoContent();
     }
 
-    // PUT /api/reservations/5/ready  (staff/admin — notify member)
+    // PUT /api/reservations/5/ready  (admin — book pulled from shelf)
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}/ready")]
     public async Task<IActionResult> MarkReady(int id)
@@ -92,6 +92,19 @@ public class ReservationsController : ControllerBase
 
         reservation.Status = ReservationStatus.Ready;
         reservation.AvailableAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // PUT /api/reservations/5/fulfill  (admin — member picked up, checkout processed)
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPut("{id:int}/fulfill")]
+    public async Task<IActionResult> Fulfill(int id)
+    {
+        var reservation = await _db.Reservations.FindAsync(id);
+        if (reservation == null) return NotFound();
+
+        reservation.Status = ReservationStatus.Fulfilled;
         await _db.SaveChangesAsync();
         return NoContent();
     }
