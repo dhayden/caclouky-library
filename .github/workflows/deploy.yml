@@ -57,6 +57,7 @@ jobs:
 
       - name: Copy files to server
         run: |
+          chmod -R 755 publish/
           tar -czf deploy.tar.gz -C publish .
           scp -i ~/.ssh/deploy_key -P 2222 deploy.tar.gz dhayden@212.56.44.143:/home/dhayden/deploy.tar.gz
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
