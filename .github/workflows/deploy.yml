@@ -57,12 +57,21 @@ jobs:
 
       - name: Copy files to server
         run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p 2222" \
-            publish/ \
-            dhayden@212.56.44.143:/home/dhayden/app/
+          tar -czf deploy.tar.gz -C publish .
+          scp -i ~/.ssh/deploy_key -P 2222 deploy.tar.gz dhayden@212.56.44.143:/home/dhayden/deploy.tar.gz
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
+            "rm -rf ~/app/* && tar -xzf ~/deploy.tar.gz -C ~/app && rm ~/deploy.tar.gz && echo extracted"
 
       - name: Start app
         run: |
-          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "cd ~/app && JWT_KEY='${{ secrets.JWT_KEY }}' JWT_ISSUER='https://caclouky.org' JWT_AUDIENCE='https://caclouky.org' nohup dotnet CacloukyLibrary.dll --urls http://0.0.0.0:5000 > ~/app/app.log 2>&1 & echo \$! > ~/app/app.pid && echo started PID \$(cat ~/app/app.pid)"
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 "
+            cd ~/app
+            export JWT_KEY='${{ secrets.JWT_KEY }}'
+            export JWT_ISSUER='https://caclouky.org'
+            export JWT_AUDIENCE='https://caclouky.org'
+            export ASPNETCORE_URLS='http://0.0.0.0:5000'
+            nohup dotnet CacloukyLibrary.dll > ~/app/app.log 2>&1 &
+            echo \$! > ~/app/app.pid
+            echo started PID \$(cat ~/app/app.pid)
+          "
+

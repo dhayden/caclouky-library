@@ -110,6 +110,25 @@ using (var scope = app.Services.CreateScope())
         if (!await roleManager.RoleExistsAsync(role))
             await roleManager.CreateAsync(new IdentityRole(role));
 
+    // ── Seed admin user (runs once if no admin exists) ────────────────────────
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    const string adminEmail = "admin@caclouky.org";
+    if (await userManager.FindByEmailAsync(adminEmail) == null)
+    {
+        var admin = new ApplicationUser
+        {
+            UserName = adminEmail,
+            Email = adminEmail,
+            FirstName = "Admin",
+            LastName = "User",
+            IsActive = true,
+            MemberSince = DateTime.UtcNow
+        };
+        var result = await userManager.CreateAsync(admin, "Admin123@");
+        if (result.Succeeded)
+            await userManager.AddToRoleAsync(admin, "Admin");
+    }
+
     // ── Dev-only book seed ────────────────────────────────────────────────────
     if (app.Environment.IsDevelopment() && !db.Books.Any())
     {
