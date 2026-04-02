@@ -129,8 +129,8 @@ using (var scope = app.Services.CreateScope())
             await userManager.AddToRoleAsync(admin, "Admin");
     }
 
-    // ── Dev-only book seed ────────────────────────────────────────────────────
-    if (app.Environment.IsDevelopment() && !db.Books.Any())
+    // ── Book seed (runs whenever DB is empty) ─────────────────────────────────
+    if (!db.Books.Any())
     {
         db.Books.AddRange(
             new Book { ISBN="9780310903994", Title="The Purpose Driven Life",   Author="Rick Warren",     Publisher="Zondervan",        PublishedYear=2002, Genre="Christian Living",      TotalCopies=3, AvailableCopies=3, CoverImageUrl="https://covers.openlibrary.org/b/isbn/9780310903994-L.jpg", Description="A guide to discovering the meaning and purpose of your life through God's plan." },
