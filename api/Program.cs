@@ -129,6 +129,22 @@ using (var scope = app.Services.CreateScope())
             await userManager.AddToRoleAsync(admin, "Admin");
     }
 
+    // ── Seed test users ───────────────────────────────────────────────────────
+    var testUsers = new[]
+    {
+        (Email: "minister@caclouky.org", First: "Minister", Last: "User", Password: "Minister123@", Role: "Minister"),
+        (Email: "member@caclouky.org",   First: "Member",   Last: "User", Password: "Member123@",   Role: "GeneralAssembly"),
+    };
+    foreach (var (Email, First, Last, Password, Role) in testUsers)
+    {
+        if (await userManager.FindByEmailAsync(Email) == null)
+        {
+            var u = new ApplicationUser { UserName = Email, Email = Email, FirstName = First, LastName = Last, IsActive = true, MemberSince = DateTime.UtcNow };
+            var r = await userManager.CreateAsync(u, Password);
+            if (r.Succeeded) await userManager.AddToRoleAsync(u, Role);
+        }
+    }
+
     // ── Book seed (runs whenever DB is empty) ─────────────────────────────────
     if (!db.Books.Any())
     {
