@@ -18,3 +18,9 @@ web/caclouky-web/.angular/
 # General
 .DS_Store
 *.log
+
+# Claude Code local config
+.claude/
+
+# Generated files (regenerate from source HTML)
+docs/*.pdf
