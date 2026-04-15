@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A3 portrait; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f4fa;
+    color: #1a1a2e;
+    width: 1120px;
+    margin: 0 auto;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    background: linear-gradient(135deg, #0f2744 0%, #1a4a8a 60%, #2563b8 100%);
+    color: white;
+    padding: 44px 60px 36px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .header-left h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+  .header-left .sub { font-size: 1rem; opacity: 0.8; margin-top: 6px; }
+  .header-right { text-align: right; font-size: 0.85rem; opacity: 0.85; line-height: 1.9; }
+  .header-right strong { opacity: 1; }
+  .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 0.78rem;
+    margin-top: 10px;
+  }
+
+  /* ─── LAYOUT ─── */
+  .body { padding: 32px 40px; display: flex; flex-direction: column; gap: 24px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+  .card {
+    background: white;
+    border-radius: 14px;
+    padding: 26px 28px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  }
+  .card-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #2563b8;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e8f0fe;
+  }
+  p { font-size: 0.9rem; line-height: 1.65; color: #444; }
+
+  .quote {
+    background: #eef4ff;
+    border-left: 4px solid #2563b8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 0.95rem;
+    font-style: italic;
+    color: #1a3a7c;
+    margin: 12px 0;
+  }
+
+  /* ─── FLOW STEPS ─── */
+  .flow { display: flex; align-items: stretch; gap: 0; margin-top: 14px; }
+  .flow-step {
+    flex: 1;
+    background: #f7f9ff;
+    border: 1.5px solid #dde8ff;
+    border-radius: 10px;
+    padding: 16px 14px;
+    text-align: center;
+    position: relative;
+  }
+  .flow-step + .flow-step { margin-left: 10px; }
+  .flow-step::before {
+    content: '→';
+    position: absolute;
+    left: -14px; top: 50%;
+    transform: translateY(-50%);
+    color: #2563b8;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  .flow-step:first-child::before { display: none; }
+  .flow-num {
+    width: 26px; height: 26px;
+    background: #2563b8; color: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.8rem;
+    margin: 0 auto 8px;
+  }
+  .flow-step h4 { font-size: 0.82rem; color: #0f2744; margin-bottom: 4px; }
+  .flow-step p { font-size: 0.76rem; color: #666; }
+
+  /* ─── ARCHITECTURE DIAGRAM ─── */
+  .arch {
+    background: #07111f;
+    border-radius: 14px;
+    padding: 30px 36px;
+    color: #c8d8f0;
+  }
+  .arch-title {
+    color: #7ab3ff;
+    font-weight: 800;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  .arch-layout {
+    display: grid;
+    grid-template-columns: 200px 1fr 200px;
+    grid-template-rows: auto;
+    align-items: start;
+    gap: 0;
+  }
+
+  /* LEFT COLUMN */
+  .arch-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-top: 80px;
+  }
+  /* RIGHT COLUMN */
+  .arch-right {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-top: 80px;
+  }
+  /* CENTER COLUMN */
+  .arch-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 0 16px;
+  }
+
+  .abox {
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    border: 1.5px solid;
+    width: 100%;
+  }
+  .abox-title { font-size: 0.8rem; font-weight: 700; }
+  .abox small { font-size: 0.66rem; opacity: 0.75; display: block; margin-top: 3px; line-height: 1.4; }
+
+  .abox-user   { border-color: #7ab3ff; color: #7ab3ff; background: rgba(122,179,255,0.1); }
+  .abox-web    { border-color: #68d391; color: #68d391; background: rgba(104,211,145,0.1); }
+  .abox-api    { border-color: #fbd38d; color: #fbd38d; background: rgba(251,211,141,0.1); }
+  .abox-db     { border-color: #b794f4; color: #b794f4; background: rgba(183,148,244,0.1); }
+  .abox-openai { border-color: #63b3ed; color: #63b3ed; background: rgba(99,179,237,0.1); }
+  .abox-claude { border-color: #fc8181; color: #fc8181; background: rgba(252,129,129,0.1); }
+  .abox-files  { border-color: #f6ad55; color: #f6ad55; background: rgba(246,173,85,0.1); }
+  .abox-answer { border-color: #68d391; color: #68d391; background: rgba(104,211,145,0.1); }
+
+  .arr-v {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #2a4060;
+    font-size: 0.78rem;
+    padding: 4px 0;
+    gap: 2px;
+  }
+  .arr-v .line { width: 1px; height: 18px; background: #2a4060; }
+  .arr-v .tip { font-size: 0.9rem; color: #3a5070; }
+  .arr-v .lbl { font-size: 0.62rem; color: #3a5070; letter-spacing: 0.3px; }
+
+  .arr-h {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #2a4060;
+    font-size: 0.62rem;
+  }
+  .arr-h .hline { height: 1px; background: #2a4060; flex: 1; }
+  .arr-h .htip  { color: #3a5070; font-size: 0.85rem; }
+
+  /* connector lines from center to sides */
+  .side-connector {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 2px 0;
+  }
+  .side-label { font-size: 0.62rem; color: #3a5070; white-space: nowrap; padding: 0 4px; }
+  .h-line { flex: 1; height: 1px; background: #2a4060; }
+  .arrow-tip { color: #3a5070; font-size: 0.9rem; }
+
+  .arch-section-label {
+    font-size: 0.6rem;
+    color: #3a5070;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+
+  /* ─── SERVER BOX ─── */
+  .server-box {
+    border: 1px dashed #2a4060;
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 8px;
+    width: 100%;
+    text-align: center;
+  }
+  .server-box-label {
+    font-size: 0.6rem;
+    color: #4a6080;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+  .server-inner {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  /* ─── TABLE ─── */
+  table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+  th { background: #0f2744; color: white; padding: 9px 12px; text-align: left; font-weight: 600; }
+  td { padding: 9px 12px; border-bottom: 1px solid #eef2ff; }
+  tr:last-child td { border-bottom: none; }
+  tr.hi td { background: #eef7ee; font-weight: 600; }
+
+  /* ─── COST CARDS ─── */
+  .cost-cards { display: flex; gap: 14px; margin-top: 14px; }
+  .cc { flex: 1; border-radius: 10px; padding: 18px; text-align: center; }
+  .cc.blue  { background: #ebf2ff; border: 1.5px solid #2563b8; }
+  .cc.green { background: #ebfaf0; border: 1.5px solid #22863a; }
+  .cc.gold  { background: #fff8e8; border: 1.5px solid #d97706; }
+  .cc .amt  { font-size: 1.9rem; font-weight: 800; margin: 6px 0; }
+  .cc.blue  .amt { color: #2563b8; }
+  .cc.green .amt { color: #22863a; }
+  .cc.gold  .amt { color: #d97706; }
+  .cc .lbl  { font-size: 0.75rem; color: #666; }
+
+  /* ─── UI MOCKUPS ─── */
+  .mockup-wrap { display: flex; gap: 20px; }
+  .mockup {
+    flex: 1;
+    background: #f5f7fb;
+    border-radius: 12px;
+    border: 1.5px solid #dde4ef;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  }
+  .mockup-bar {
+    background: #0f2744;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #ff5f56; }
+  .dot.y { background: #ffbd2e; }
+  .dot.g { background: #27c93f; }
+  .mockup-url { background: rgba(255,255,255,0.12); border-radius: 4px; padding: 3px 10px; font-size: 0.7rem; color: #aac4e8; flex: 1; }
+
+  .app-nav {
+    background: #1a3a7c;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .app-nav .logo { color: white; font-weight: 700; font-size: 0.88rem; margin-right: 12px; }
+  .nav-item { color: rgba(255,255,255,0.65); font-size: 0.75rem; }
+  .nav-item.active { color: white; font-weight: 600; border-bottom: 2px solid #7ab3ff; padding-bottom: 2px; }
+  .nav-spacer { flex: 1; }
+  .nav-user { background: rgba(255,255,255,0.15); border-radius: 20px; padding: 3px 12px; color: white; font-size: 0.72rem; }
+
+  .chat-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 300px; }
+  .chat-header { font-size: 0.95rem; font-weight: 700; color: #0f2744; margin-bottom: 2px; }
+  .chat-sub { font-size: 0.72rem; color: #888; margin-bottom: 8px; }
+  .msg-user {
+    align-self: flex-end;
+    background: #2563b8; color: white;
+    padding: 10px 14px; border-radius: 14px 14px 4px 14px;
+    font-size: 0.8rem; max-width: 85%;
+  }
+  .msg-ai {
+    align-self: flex-start;
+    background: white;
+    border: 1px solid #dde8ff;
+    padding: 12px 14px; border-radius: 4px 14px 14px 14px;
+    font-size: 0.78rem; color: #333; max-width: 92%;
+    line-height: 1.55;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .msg-ai .ai-label { font-size: 0.68rem; color: #2563b8; font-weight: 700; margin-bottom: 4px; }
+  .citations { margin-top: 8px; border-top: 1px solid #eef2ff; padding-top: 6px; }
+  .cit-label { font-size: 0.65rem; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .cit { font-size: 0.68rem; color: #2563b8; margin-top: 3px; }
+  .chat-input-row { display: flex; gap: 8px; padding: 10px 16px; background: white; border-top: 1px solid #eee; }
+  .chat-input { flex: 1; border: 1.5px solid #dde8ff; border-radius: 8px; padding: 9px 12px; font-size: 0.78rem; color: #999; }
+  .chat-btn { background: #2563b8; color: white; border-radius: 8px; padding: 9px 16px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+
+  .admin-body { padding: 16px; }
+  .admin-title { font-size: 0.9rem; font-weight: 700; color: #0f2744; margin-bottom: 12px; }
+  .upload-zone {
+    border: 2px dashed #2563b8;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    background: #f0f5ff;
+    margin-bottom: 14px;
+  }
+  .upload-zone .icon { font-size: 1.8rem; margin-bottom: 6px; }
+  .upload-zone p { font-size: 0.75rem; color: #555; }
+  .upload-zone .btn { background: #2563b8; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.75rem; display: inline-block; margin-top: 8px; }
+  .doc-list { display: flex; flex-direction: column; gap: 6px; }
+  .doc-row {
+    background: white; border: 1px solid #eee; border-radius: 8px;
+    padding: 9px 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .doc-icon { font-size: 1rem; }
+  .doc-info { flex: 1; }
+  .doc-name { font-size: 0.78rem; font-weight: 600; color: #0f2744; }
+  .doc-meta { font-size: 0.67rem; color: #999; }
+  .status-badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .status-badge.indexed { background: #ebfaf0; color: #22863a; }
+  .status-badge.pending { background: #fff8e8; color: #d97706; }
+  .index-btn { font-size: 0.68rem; background: #0f2744; color: white; padding: 4px 10px; border-radius: 6px; }
+
+  .benefit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .benefit { background: #f7f9ff; border-radius: 8px; padding: 12px 14px; border: 1px solid #e0e8ff; }
+  .benefit-icon { font-size: 1.1rem; margin-bottom: 4px; }
+  .benefit h4 { font-size: 0.8rem; color: #0f2744; margin-bottom: 2px; }
+  .benefit p { font-size: 0.74rem; color: #666; }
+
+  .ask-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eef2ff; align-items: flex-start; }
+  .ask-row:last-child { border: none; }
+  .ask-num { background: #2563b8; color: white; width: 24px; height: 24px; min-width: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+  .ask-row p { font-size: 0.85rem; color: #333; }
+
+  .footer {
+    background: #0f2744;
+    color: rgba(255,255,255,0.45);
+    text-align: center;
+    font-size: 0.72rem;
+    padding: 16px;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <h1>AI-Powered Sermon Search</h1>
+    <div class="sub">Intelligent, conversational search over Bro. Sowders' sermon papers and teachings in PDF format</div>
+    <div class="badge">Awaiting Approval — April 2026</div>
+  </div>
+  <div class="header-right">
+    <strong>Prepared by: Derrick Hayden</strong><br>
+    Project: Caclouky Library — caclouky.org<br>
+    Date: April 2026<br>
+    Type: Feature Proposal
+  </div>
+</div>
+
+<div class="body">
+
+  <!-- ROW 1: Problem + Solution -->
+  <div class="row2">
+    <div class="card">
+      <div class="card-title">The Problem</div>
+      <p>The library holds a growing collection of <strong>Bro. Sowders' sermon papers and teachings in PDF format</strong>. These documents contain invaluable theological content — but today there is no way to search them meaningfully.</p>
+      <div class="quote">"What did Bro. Sowders teach about long hair?"</div>
+      <p>A member wanting to research a topic must open and read through each PDF manually. This makes the existing material largely inaccessible for everyday use and research.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">The Solution</div>
+      <p>Add an <strong>AI-powered chat search</strong> to the Caclouky Library. Members type a question in plain English — the system reads the relevant portions of Bro. Sowders' sermon PDFs and returns a clear, conversational answer with <strong>citations showing the exact document and page</strong> the answer came from.</p>
+      <br>
+      <p>This is not a keyword search. The AI understands the <em>meaning</em> of a question and finds relevant content even when the exact words don't match — it reasons over the source material the same way a researcher would.</p>
+    </div>
+  </div>
+
+  <!-- ROW 2: How It Works -->
+  <div class="card">
+    <div class="card-title">How It Works — The RAG Pipeline (Retrieval-Augmented Generation)</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <h4>PDF Upload</h4>
+        <p>Admin uploads Bro. Sowders' sermon PDFs via the library admin panel. Files are stored on the server.</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <h4>Text Extraction</h4>
+        <p>Text is extracted from each PDF page automatically by the API server.</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <h4>Chunking</h4>
+        <p>Text is split into ~500-word sections, each tagged with document name and page number.</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <h4>AI Indexing</h4>
+        <p>OpenAI converts each chunk into a numeric "fingerprint" of its meaning (embedding), stored in the database.</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">5</div>
+        <h4>Semantic Search</h4>
+        <p>Member's question is also embedded → top 5 most relevant chunks retrieved from the database.</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">6</div>
+        <h4>AI Answer</h4>
+        <p>Claude AI reads the retrieved chunks and writes a natural language answer with page citations.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 3: Architecture Diagram -->
+  <div class="card">
+    <div class="card-title">Application Architecture</div>
+    <div class="arch">
+      <div class="arch-title">Caclouky Library — AI Sermon Search System</div>
+
+      <div style="display:flex; gap:0; align-items:flex-start;">
+
+        <!-- LEFT SIDE: External AI Services -->
+        <div style="width:210px; flex-shrink:0; display:flex; flex-direction:column; gap:0; padding-top:148px;">
+          <div class="arch-section-label" style="margin-bottom:8px;">External AI Services</div>
+
+          <div class="abox abox-openai" style="margin-bottom:6px;">
+            <div class="abox-title">OpenAI API</div>
+            <small>text-embedding-3-small<br>Converts text → meaning vector</small>
+          </div>
+
+          <div style="display:flex; align-items:center; padding: 4px 0;">
+            <div style="flex:1; height:1px; background:#2a4060;"></div>
+            <div style="width:16px; text-align:center; color:#3a5070; font-size:0.75rem;">↕</div>
+            <div style="flex:1; height:1px; background:#2a4060;"></div>
+          </div>
+          <div style="font-size:0.6rem; color:#3a5070; text-align:center; margin-bottom:6px;">embed question + index chunks</div>
+
+          <div class="abox abox-claude">
+            <div class="abox-title">Anthropic Claude API</div>
+            <small>claude-sonnet-4-6<br>Reads source text, writes answer</small>
+          </div>
+          <div style="font-size:0.6rem; color:#3a5070; text-align:center; margin-top:4px;">generate natural language answer</div>
+        </div>
+
+        <!-- HORIZONTAL LINES LEFT -->
+        <div style="width:36px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; padding-top:214px; gap:0;">
+          <div style="height:1px; width:100%; background:#2a4060;"></div>
+          <div style="height:70px;"></div>
+          <div style="height:1px; width:100%; background:#2a4060;"></div>
+        </div>
+
+        <!-- CENTER COLUMN -->
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:0;">
+
+          <!-- BROWSER TIER -->
+          <div class="arch-section-label">Member's Browser</div>
+          <div class="abox abox-user" style="width:320px;">
+            <div class="abox-title">Angular Web Application</div>
+            <small>caclouky.org &nbsp;·&nbsp; Angular 18 + SSR<br>Chat UI &nbsp;·&nbsp; Book Catalog &nbsp;·&nbsp; Admin Panel &nbsp;·&nbsp; Auth</small>
+          </div>
+
+          <div class="arr-v">
+            <div class="line"></div>
+            <div class="lbl">HTTPS &nbsp;REST API</div>
+            <div class="line"></div>
+            <div class="tip">↓</div>
+          </div>
+
+          <!-- SERVER TIER -->
+          <div class="arch-section-label">Server — caclouky.org</div>
+          <div style="border: 1.5px dashed #2a4060; border-radius:12px; padding:16px; width:100%; display:flex; flex-direction:column; align-items:center; gap:0;">
+            <div class="abox abox-api" style="width:320px;">
+              <div class="abox-title">ASP.NET Core 9 API</div>
+              <small>Port 8080 &nbsp;·&nbsp; Auth &nbsp;·&nbsp; Books &nbsp;·&nbsp; Checkouts<br>PDF Indexing &nbsp;·&nbsp; RAG Search Pipeline</small>
+            </div>
+
+            <div class="arr-v">
+              <div class="line"></div>
+              <div class="lbl">reads / writes</div>
+              <div class="line"></div>
+              <div class="tip">↕</div>
+            </div>
+
+            <!-- DB + FILES side by side -->
+            <div style="display:flex; gap:16px; width:100%; justify-content:center;">
+              <div class="abox abox-db" style="flex:1;">
+                <div class="abox-title">SQL Server Database</div>
+                <small>Books · Members · Checkouts<br>PdfDocuments · PdfChunks<br>Embedding vectors (1536 dimensions)</small>
+              </div>
+              <div style="display:flex; align-items:center; color:#2a4060; font-size:1rem;">↔</div>
+              <div class="abox abox-files" style="flex:1;">
+                <div class="abox-title">PDF File Storage</div>
+                <small>Bro. Sowders' sermon papers<br>stored as files on the server<br>Referenced by database records</small>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- HORIZONTAL LINES RIGHT -->
+        <div style="width:36px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; padding-top:214px; gap:0;">
+          <div style="height:1px; width:100%; background:#2a4060;"></div>
+          <div style="height:70px;"></div>
+          <div style="height:1px; width:100%; background:#2a4060;"></div>
+        </div>
+
+        <!-- RIGHT SIDE: Data Flow Legend -->
+        <div style="width:210px; flex-shrink:0; display:flex; flex-direction:column; gap:8px; padding-top:60px;">
+          <div class="arch-section-label">Data Flow</div>
+
+          <div style="background:rgba(122,179,255,0.06); border:1px solid #1e3050; border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:0.68rem; color:#4a8080; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Query Path</div>
+            <div style="font-size:0.7rem; color:#8aaad0; line-height:1.6;">
+              1. Member types question<br>
+              2. Web app sends to API<br>
+              3. API embeds question via OpenAI<br>
+              4. API searches DB for top chunks<br>
+              5. API sends chunks + question to Claude<br>
+              6. Claude returns answer + citations<br>
+              7. Answer displayed in chat UI
+            </div>
+          </div>
+
+          <div style="background:rgba(246,173,85,0.06); border:1px solid #3a2a10; border-radius:8px; padding:12px; margin-top:4px; display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:0.68rem; color:#806040; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Index Path (Admin, once)</div>
+            <div style="font-size:0.7rem; color:#a08060; line-height:1.6;">
+              1. Admin uploads PDF<br>
+              2. API extracts text from each page<br>
+              3. Text split into ~500-word chunks<br>
+              4. Each chunk embedded via OpenAI<br>
+              5. Chunks + vectors saved to DB<br>
+              6. Document marked as indexed
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 4: UI MOCKUPS -->
+  <div class="card">
+    <div class="card-title">Proposed UI — Screen Mockups</div>
+    <div class="mockup-wrap">
+
+      <!-- CHAT UI MOCKUP -->
+      <div class="mockup" style="flex:1.2;">
+        <div class="mockup-bar">
+          <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+          <div class="mockup-url">caclouky.org/search</div>
+        </div>
+        <div class="app-nav">
+          <span class="logo">Caclouky Library</span>
+          <span class="nav-item">Catalog</span>
+          <span class="nav-item">My Checkouts</span>
+          <span class="nav-item active">Search Sermons</span>
+          <span class="nav-spacer"></span>
+          <span class="nav-user">Member ▾</span>
+        </div>
+        <div class="chat-body">
+          <div class="chat-header">Sermon Search</div>
+          <div class="chat-sub">Ask a question about Bro. Sowders' teachings — powered by AI</div>
+          <div class="msg-user">What did Bro. Sowders teach about long hair?</div>
+          <div class="msg-ai">
+            <div class="ai-label">AI Answer</div>
+            Bro. Sowders taught that long hair on women is a symbol of their submission to God and their husbands, drawing from 1 Corinthians 11. He emphasized that a woman's uncut hair serves as her "covering" and is a sign of spiritual identity in the church. He also addressed that men cutting their hair short reflects the headship order established by God.
+            <div class="citations">
+              <div class="cit-label">Sources</div>
+              <div class="cit">📄 Sowders-HairAndCovering.pdf — Page 4</div>
+              <div class="cit">📄 Sowders-ChurchOrder-1962.pdf — Page 12</div>
+              <div class="cit">📄 Sowders-WomansPlace.pdf — Page 7</div>
+            </div>
+          </div>
+          <div class="msg-user">Did he give a scripture reference for this?</div>
+          <div class="msg-ai">
+            <div class="ai-label">AI Answer</div>
+            Yes — Bro. Sowders primarily referenced <strong>1 Corinthians 11:3–15</strong>, citing verse 15 specifically: <em>"But if a woman have long hair, it is a glory to her: for her hair is given her for a covering."</em> He used this passage as the scriptural foundation throughout his teaching on this subject.
+            <div class="citations">
+              <div class="cit-label">Sources</div>
+              <div class="cit">📄 Sowders-HairAndCovering.pdf — Page 5</div>
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <div class="chat-input">Ask another question about the sermons...</div>
+          <div class="chat-btn">Ask →</div>
+        </div>
+      </div>
+
+      <!-- ADMIN MOCKUP -->
+      <div class="mockup" style="flex:0.8;">
+        <div class="mockup-bar">
+          <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+          <div class="mockup-url">caclouky.org/admin/sermons</div>
+        </div>
+        <div class="app-nav">
+          <span class="logo">Caclouky Library</span>
+          <span class="nav-item">Members</span>
+          <span class="nav-item active">Sermon Docs</span>
+          <span class="nav-spacer"></span>
+          <span class="nav-user">Admin ▾</span>
+        </div>
+        <div class="admin-body">
+          <div class="admin-title">Sermon PDF Management</div>
+          <div class="upload-zone">
+            <div class="icon">📂</div>
+            <p>Drop Bro. Sowders' sermon PDFs here<br>or click to browse</p>
+            <div class="btn">Choose PDF Files</div>
+          </div>
+          <div class="doc-list">
+            <div class="doc-row">
+              <div class="doc-icon">📄</div>
+              <div class="doc-info">
+                <div class="doc-name">Sowders-HairAndCovering.pdf</div>
+                <div class="doc-meta">18 pages · Indexed Apr 2026</div>
+              </div>
+              <div class="status-badge indexed">✓ Indexed</div>
+            </div>
+            <div class="doc-row">
+              <div class="doc-icon">📄</div>
+              <div class="doc-info">
+                <div class="doc-name">Sowders-ChurchOrder-1962.pdf</div>
+                <div class="doc-meta">34 pages · Indexed Apr 2026</div>
+              </div>
+              <div class="status-badge indexed">✓ Indexed</div>
+            </div>
+            <div class="doc-row">
+              <div class="doc-icon">📄</div>
+              <div class="doc-info">
+                <div class="doc-name">Sowders-WomansPlace.pdf</div>
+                <div class="doc-meta">22 pages · Indexed Apr 2026</div>
+              </div>
+              <div class="status-badge indexed">✓ Indexed</div>
+            </div>
+            <div class="doc-row">
+              <div class="doc-icon">📄</div>
+              <div class="doc-info">
+                <div class="doc-name">Sowders-Baptism-Teaching.pdf</div>
+                <div class="doc-meta">11 pages · Uploaded, not yet indexed</div>
+              </div>
+              <div class="status-badge pending">⏳ Pending</div>
+              <div class="index-btn">Index Now</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ROW 5: Costs + Benefits -->
+  <div class="row2">
+    <div class="card">
+      <div class="card-title">Cost Analysis</div>
+      <table>
+        <thead><tr><th>Service</th><th>Used For</th><th>Rate</th></tr></thead>
+        <tbody>
+          <tr><td>OpenAI Embeddings</td><td>Indexing PDFs + embedding each question</td><td>$0.02 / 1M tokens</td></tr>
+          <tr><td>Anthropic Claude</td><td>Generating natural language answers</td><td>~$0.01–0.02 / query</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Monthly Questions</th><th>Est. Monthly Cost</th></tr></thead>
+          <tbody>
+            <tr><td>100 questions / month</td><td>~$1.50</td></tr>
+            <tr><td>500 questions / month</td><td>~$7.50</td></tr>
+            <tr class="hi"><td>1,000 questions / month</td><td>~$15.00</td></tr>
+            <tr><td>2,000 questions / month</td><td>~$30.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cost-cards">
+        <div class="cc blue">
+          <div class="lbl">One-Time Indexing<br>(all existing PDFs)</div>
+          <div class="amt">&lt;$1</div>
+        </div>
+        <div class="cc green">
+          <div class="lbl">Recommended<br>Monthly Budget</div>
+          <div class="amt">$15–30</div>
+        </div>
+        <div class="cc gold">
+          <div class="lbl">Estimated<br>First Year Total</div>
+          <div class="amt">~$90</div>
+        </div>
+      </div>
+      <p style="margin-top:10px;font-size:0.76rem;color:#888;">Pay-as-you-go. No subscriptions or contracts. Spending caps available on both dashboards.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Benefits</div>
+      <div class="benefit-grid">
+        <div class="benefit">
+          <div class="benefit-icon">🔍</div>
+          <h4>Find Anything Instantly</h4>
+          <p>Search Bro. Sowders' teachings by topic in seconds, not hours</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">📖</div>
+          <h4>Cites Every Source</h4>
+          <p>Every answer shows the exact PDF and page number it came from</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">💡</div>
+          <h4>Understands Meaning</h4>
+          <p>Finds relevant teachings even if the exact words aren't in the PDF</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">💬</div>
+          <h4>Follow-Up Questions</h4>
+          <p>Members can continue the conversation — "Did he give a scripture for that?"</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">🔒</div>
+          <h4>Members Only</h4>
+          <p>Gated behind login — only approved library members can access</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">📈</div>
+          <h4>Grows With the Library</h4>
+          <p>New PDFs added by admin are searchable immediately after indexing</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 6: What I'm Asking For -->
+  <div class="card">
+    <div class="card-title">What I Am Asking For</div>
+    <div class="ask-row">
+      <div class="ask-num">1</div>
+      <p>Approval to create an account on <strong>console.anthropic.com</strong> — Anthropic (makers of Claude AI) — which powers the natural language answers</p>
+    </div>
+    <div class="ask-row">
+      <div class="ask-num">2</div>
+      <p>Approval to create an account on <strong>platform.openai.com</strong> — OpenAI — which powers the semantic search that finds the right sermon passages</p>
+    </div>
+    <div class="ask-row">
+      <div class="ask-num">3</div>
+      <p>A <strong>monthly budget of $15–$30</strong> to cover ongoing API usage (covers up to ~2,000 member questions per month)</p>
+    </div>
+    <div class="ask-row">
+      <div class="ask-num">4</div>
+      <p>A <strong>one-time budget of &lt;$1</strong> to index the entire existing collection of Bro. Sowders' sermon PDFs on first setup</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Prepared by Derrick Hayden &nbsp;·&nbsp; Caclouky Library &nbsp;·&nbsp; AI Sermon Search Proposal &nbsp;·&nbsp; April 2026 &nbsp;·&nbsp; caclouky.org
+</div>
+
+</body>
+</html>
