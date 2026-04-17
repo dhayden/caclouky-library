@@ -75,7 +75,7 @@ public class PdfIndexService
         var chunks = BuildChunks(pageTexts);
         foreach (var (page, chunkIndex, text) in chunks)
         {
-            var embedding  = await _gemini.GetEmbeddingAsync(text);
+            var embedding     = await _gemini.GetEmbeddingAsync(text);
             var embeddingJson = JsonSerializer.Serialize(embedding);
             _db.PdfChunks.Add(new PdfChunk
             {
@@ -85,6 +85,8 @@ public class PdfIndexService
                 Content    = text,
                 Embedding  = embeddingJson
             });
+            // Small delay to stay within free-tier rate limits
+            await Task.Delay(500);
         }
 
         doc.IsIndexed = true;

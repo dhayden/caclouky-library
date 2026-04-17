@@ -15,6 +15,9 @@ web/caclouky-web/.angular/
 # Secrets
 .env
 
+# Sermon PDFs (large binary files — stored on server, not in git)
+api/sermon-pdfs/
+
 # General
 .DS_Store
 *.log
