@@ -8,7 +8,7 @@ public class GeminiService
 {
     private readonly HttpClient _http;
     private readonly string _apiKey;
-    private const string EmbedUrl  = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent";
+    private const string EmbedUrl  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
     private const string ChatUrl   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
     public GeminiService(HttpClient http, IConfiguration config)
@@ -21,11 +21,11 @@ public class GeminiService
     {
         var body = new
         {
-            model   = "models/text-embedding-004",
+            model   = "models/gemini-embedding-001",
             content = new { parts = new[] { new { text } } }
         };
 
-        var response = await PostAsync($"{EmbedUrl}?key={_apiKey}", body);
+        var response = await PostAsync(EmbedUrl, body);
         var values   = response.RootElement
             .GetProperty("embedding")
             .GetProperty("values")
@@ -60,7 +60,7 @@ public class GeminiService
             }
         };
 
-        var response = await PostAsync($"{ChatUrl}?key={_apiKey}", body);
+        var response = await PostAsync(ChatUrl, body);
         return response.RootElement
             .GetProperty("candidates")[0]
             .GetProperty("content")
@@ -73,8 +73,13 @@ public class GeminiService
     {
         var json    = JsonSerializer.Serialize(body);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var resp    = await _http.PostAsync(url, content);
-        var raw     = await resp.Content.ReadAsStringAsync();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+        // AQ. prefix keys from Google AI Studio use x-goog-api-key header
+        request.Headers.TryAddWithoutValidation("x-goog-api-key", _apiKey);
+
+        var resp = await _http.SendAsync(request);
+        var raw  = await resp.Content.ReadAsStringAsync();
 
         if (!resp.IsSuccessStatusCode)
             throw new HttpRequestException($"Gemini API error {(int)resp.StatusCode}: {raw}");
