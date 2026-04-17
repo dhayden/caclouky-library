@@ -96,6 +96,9 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddHttpClient<CacloukyLibrary.Services.GeminiService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.PdfIndexService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.SearchService>();
+builder.Services.AddSingleton<CacloukyLibrary.Services.IndexingQueue>();
+builder.Services.AddSingleton<CacloukyLibrary.Services.IndexingStatus>();
+builder.Services.AddHostedService<CacloukyLibrary.Services.IndexingWorker>();
 
 builder.Services.AddControllers();
 

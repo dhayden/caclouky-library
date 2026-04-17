@@ -48,7 +48,14 @@ export class SermonSearchService {
   }
 
   indexAll() {
-    return this.http.post<{ message: string; indexed: number }>(`${this.base}/sermon-docs/index-all`, {});
+    return this.http.post<{ message: string; queued: number }>(`${this.base}/sermon-docs/index-all`, {});
+  }
+
+  getIndexStatus() {
+    return this.http.get<{
+      isRunning: boolean; total: number; completed: number;
+      failed: number; currentFile: string; startedAt: string | null; errors: string[];
+    }>(`${this.base}/sermon-docs/index-status`);
   }
 
   chat(question: string) {

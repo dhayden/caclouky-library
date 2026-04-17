@@ -69,21 +69,34 @@ public class GeminiService
             .GetString() ?? "";
     }
 
-    private async Task<JsonDocument> PostAsync(string url, object body)
+    private async Task<JsonDocument> PostAsync(string url, object body, int maxRetries = 5)
     {
-        var json    = JsonSerializer.Serialize(body);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var json = JsonSerializer.Serialize(body);
+        var delayMs = 2000;
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
-        // AQ. prefix keys from Google AI Studio use x-goog-api-key header
-        request.Headers.TryAddWithoutValidation("x-goog-api-key", _apiKey);
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+            request.Headers.TryAddWithoutValidation("x-goog-api-key", _apiKey);
 
-        var resp = await _http.SendAsync(request);
-        var raw  = await resp.Content.ReadAsStringAsync();
+            var resp = await _http.SendAsync(request);
+            var raw  = await resp.Content.ReadAsStringAsync();
 
-        if (!resp.IsSuccessStatusCode)
+            if (resp.IsSuccessStatusCode)
+                return JsonDocument.Parse(raw);
+
+            // Rate limited — wait and retry
+            if ((int)resp.StatusCode == 429 && attempt < maxRetries)
+            {
+                await Task.Delay(delayMs);
+                delayMs *= 2; // exponential backoff
+                continue;
+            }
+
             throw new HttpRequestException($"Gemini API error {(int)resp.StatusCode}: {raw}");
+        }
 
-        return JsonDocument.Parse(raw);
+        throw new HttpRequestException("Gemini API: max retries exceeded.");
     }
 }
