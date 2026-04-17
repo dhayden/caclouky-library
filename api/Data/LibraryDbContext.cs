@@ -11,6 +11,8 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Book> Books => Set<Book>();
     public DbSet<Checkout> Checkouts => Set<Checkout>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
+    public DbSet<PdfDocument> PdfDocuments => Set<PdfDocument>();
+    public DbSet<PdfChunk> PdfChunks => Set<PdfChunk>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -36,6 +38,19 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
             b.HasOne(x => x.Book).WithMany(x => x.Reservations).HasForeignKey(x => x.BookId);
             b.HasOne(x => x.User).WithMany(x => x.Reservations).HasForeignKey(x => x.UserId);
             b.Property(x => x.Status).HasConversion<string>();
+        });
+
+        builder.Entity<PdfDocument>(b =>
+        {
+            b.Property(x => x.Title).HasMaxLength(500).IsRequired();
+            b.Property(x => x.FileName).HasMaxLength(500).IsRequired();
+        });
+
+        builder.Entity<PdfChunk>(b =>
+        {
+            b.HasOne(x => x.Document).WithMany(x => x.Chunks).HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.Content).HasColumnType("nvarchar(max)");
+            b.Property(x => x.Embedding).HasColumnType("nvarchar(max)");
         });
     }
 }

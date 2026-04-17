@@ -92,6 +92,11 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// ── Sermon Search Services ────────────────────────────────────────────────────
+builder.Services.AddHttpClient<CacloukyLibrary.Services.GeminiService>();
+builder.Services.AddScoped<CacloukyLibrary.Services.PdfIndexService>();
+builder.Services.AddScoped<CacloukyLibrary.Services.SearchService>();
+
 builder.Services.AddControllers();
 
 var app = builder.Build();
