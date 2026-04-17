@@ -14,6 +14,13 @@ export const routes: Routes = [
     loadComponent: () => import('./auth/register/register.component').then(m => m.RegisterComponent)
   },
 
+  // Sermon Search
+  {
+    path: 'search',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/search/search.component').then(m => m.SearchComponent)
+  },
+
   // Catalog (public browse, auth required for reserve)
   {
     path: 'catalog',
@@ -67,6 +74,11 @@ export const routes: Routes = [
       {
         path: 'checkouts',
         loadComponent: () => import('./features/admin/manage-checkouts/manage-checkouts.component').then(m => m.ManageCheckoutsComponent)
+      },
+      {
+        path: 'sermon-docs',
+        canActivate: [roleGuard('Admin')],
+        loadComponent: () => import('./features/admin/sermon-docs/sermon-docs.component').then(m => m.SermonDocsComponent)
       },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
     ]

@@ -32,6 +32,10 @@ import { MatIconModule } from '@angular/material/icon';
             <mat-icon matListItemIcon>people</mat-icon>
             <span matListItemTitle>Members</span>
           </a>
+          <a mat-list-item routerLink="sermon-docs" routerLinkActive="active-link">
+            <mat-icon matListItemIcon>picture_as_pdf</mat-icon>
+            <span matListItemTitle>Sermon Docs</span>
+          </a>
         </mat-nav-list>
       </mat-sidenav>
       <mat-sidenav-content class="admin-content">
