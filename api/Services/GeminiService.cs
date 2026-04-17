@@ -9,7 +9,7 @@ public class GeminiService
     private readonly HttpClient _http;
     private readonly string _apiKey;
     private const string EmbedUrl  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
-    private const string ChatUrl   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    private const string ChatUrl   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
     public GeminiService(HttpClient http, IConfiguration config)
     {
