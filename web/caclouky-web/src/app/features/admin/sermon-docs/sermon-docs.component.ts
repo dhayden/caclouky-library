@@ -25,7 +25,16 @@ import { SermonSearchService, SermonDoc } from '../../../core/services/sermon-se
         <input #fileInput type="file" accept=".pdf" hidden (change)="onFileSelected($event)" />
       </div>
 
-      <p class="hint">Upload Bro. Sowders' sermon PDFs. Each file is automatically indexed for AI search after upload.</p>
+      <p class="hint">Upload PDFs individually below, or drop all PDF files into the <strong>api/sermon-pdfs/</strong> folder on the server and click <strong>Index All</strong>.</p>
+
+      <div class="bulk-row">
+        <button mat-stroked-button color="accent" (click)="indexAll()" [disabled]="indexingAll">
+          <mat-spinner *ngIf="indexingAll" diameter="16" style="display:inline-block;margin-right:6px;"></mat-spinner>
+          <mat-icon *ngIf="!indexingAll">auto_fix_high</mat-icon>
+          Index All New PDFs from Server Folder
+        </button>
+        <span *ngIf="indexAllResult" class="index-result">{{ indexAllResult }}</span>
+      </div>
 
       <div *ngIf="uploading" class="upload-progress">
         <mat-spinner diameter="24"></mat-spinner>
@@ -90,12 +99,16 @@ import { SermonSearchService, SermonDoc } from '../../../core/services/sermon-se
     .doc-name { font-weight: 500; }
     .doc-file { font-size: 0.78rem; color: #999; }
     .no-data { text-align: center; padding: 32px; color: #999; }
+    .bulk-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .index-result { font-size: 0.85rem; color: #2e7d32; font-weight: 500; }
   `]
 })
 export class SermonDocsComponent implements OnInit {
   docs: SermonDoc[] = [];
   columns = ['title', 'pages', 'status', 'uploaded', 'actions'];
   uploading = false;
+  indexingAll = false;
+  indexAllResult = '';
   busy: Record<number, boolean> = {};
 
   constructor(private svc: SermonSearchService, private snack: MatSnackBar) {}
@@ -119,6 +132,22 @@ export class SermonDocsComponent implements OnInit {
       error: () => {
         this.uploading = false;
         this.snack.open('Upload failed. Please try again.', 'OK', { duration: 4000 });
+      }
+    });
+  }
+
+  indexAll() {
+    this.indexingAll = true;
+    this.indexAllResult = '';
+    this.svc.indexAll().subscribe({
+      next: res => {
+        this.indexingAll = false;
+        this.indexAllResult = res.message;
+        if (res.indexed > 0) this.load();
+      },
+      error: () => {
+        this.indexingAll = false;
+        this.indexAllResult = 'Failed. Check that PDFs are in the sermon-pdfs folder.';
       }
     });
   }
