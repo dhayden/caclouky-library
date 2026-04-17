@@ -62,6 +62,40 @@ public class SermonDocsController : ControllerBase
         }
     }
 
+    // POST /api/sermon-docs/index-all
+    // Scans the sermon-pdfs folder and indexes any PDFs not already in the database
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPost("index-all")]
+    public async Task<IActionResult> IndexAll()
+    {
+        var files = Directory.GetFiles(_indexer.StoragePath, "*.pdf");
+        var existing = await _db.PdfDocuments.Select(d => d.FileName).ToListAsync();
+
+        var newFiles = files
+            .Select(Path.GetFileName)
+            .Where(f => !existing.Contains(f))
+            .ToList();
+
+        if (newFiles.Count == 0)
+            return Ok(new { message = "All PDFs already indexed.", indexed = 0 });
+
+        int count = 0;
+        foreach (var fileName in newFiles)
+        {
+            var filePath = Path.Combine(_indexer.StoragePath, fileName!);
+            await using var stream = System.IO.File.OpenRead(filePath);
+            var formFile = new FormFile(stream, 0, stream.Length, "file", fileName!)
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = "application/pdf"
+            };
+            await _indexer.SaveAndIndexAsync(formFile);
+            count++;
+        }
+
+        return Ok(new { message = $"Indexed {count} new PDF(s).", indexed = count });
+    }
+
     // DELETE /api/sermon-docs/5
     [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]

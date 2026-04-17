@@ -26,11 +26,14 @@ public class PdfIndexService
 
     public async Task<PdfDocument> SaveAndIndexAsync(IFormFile file)
     {
-        // Save file to disk
+        // Save file to disk (skip write if already there, e.g. bulk-indexed from folder)
         var fileName = Path.GetFileName(file.FileName);
         var filePath = Path.Combine(_storageDir, fileName);
-        await using (var stream = new FileStream(filePath, FileMode.Create))
+        if (!File.Exists(filePath))
+        {
+            await using var stream = new FileStream(filePath, FileMode.Create);
             await file.CopyToAsync(stream);
+        }
 
         // Extract text by page
         var pageTexts = ExtractPages(filePath);

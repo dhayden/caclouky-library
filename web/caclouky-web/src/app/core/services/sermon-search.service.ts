@@ -47,6 +47,10 @@ export class SermonSearchService {
     return this.http.delete<void>(`${this.base}/sermon-docs/${id}`);
   }
 
+  indexAll() {
+    return this.http.post<{ message: string; indexed: number }>(`${this.base}/sermon-docs/index-all`, {});
+  }
+
   chat(question: string) {
     return this.http.post<ChatResponse>(`${this.base}/search/chat`, { question });
   }
