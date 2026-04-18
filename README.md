@@ -10,6 +10,8 @@ A church library management system built with ASP.NET Core 9, Angular 18, and SQ
 - **Reservations** — members can reserve books and manage their queue
 - **Checkouts** — admin/minister staff can check books in and out with due dates and late fees
 - **Member management** — admins can create and manage member accounts
+- **Sermon document library** — upload and browse sermon PDFs
+- **AI-powered sermon search** — semantic search and chat over sermon content using Google Gemini
 - **JWT authentication** with secure, stateless sessions
 
 ## Tech Stack
@@ -20,7 +22,8 @@ A church library management system built with ASP.NET Core 9, Angular 18, and SQ
 | Frontend | Angular 18 (SSR), Angular Material                     |
 | Database | SQL Server (Express for local dev)                     |
 | Auth     | JWT Bearer tokens, role-based policies                 |
-| Deploy   | Docker Compose, nginx reverse proxy                    |
+| AI       | Google Gemini (embeddings + chat for sermon search)    |
+| Deploy   | GitHub Actions → SSH, Docker Compose for local dev     |
 
 ## Getting Started
 
@@ -98,7 +101,10 @@ caclouky-library/
 │   └── src/app/
 │       ├── core/           # Auth service, interceptors, guards
 │       └── features/       # Catalog, admin, member pages
-├── docker-compose.yml
+├── .github/workflows/      # CI and deploy pipelines
+│   ├── ci.yml
+│   └── deploy.yml          # Builds & deploys to production on push to main
+├── docker-compose.yml      # Local dev with SQL Server container
 ├── .env.example            # Secret template — copy to .env
 └── .gitignore              # .env and appsettings.json are excluded
 ```
