@@ -49,8 +49,6 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PdfChunk>(b =>
         {
             b.HasOne(x => x.Document).WithMany(x => x.Chunks).HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
-            b.Property(x => x.Content).HasColumnType("nvarchar(max)");
-            b.Property(x => x.Embedding).HasColumnType("nvarchar(max)");
         });
     }
 }
