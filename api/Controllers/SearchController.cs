@@ -7,7 +7,7 @@ namespace CacloukyLibrary.Controllers;
 
 [ApiController]
 [Route("api/search")]
-[Authorize(Policy = "AnyRole")]
+[AllowAnonymous]
 public class SearchController : ControllerBase
 {
     private readonly SearchService _search;

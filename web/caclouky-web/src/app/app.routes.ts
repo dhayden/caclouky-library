@@ -14,10 +14,9 @@ export const routes: Routes = [
     loadComponent: () => import('./auth/register/register.component').then(m => m.RegisterComponent)
   },
 
-  // Sermon Search
+  // Sermon Search (public)
   {
     path: 'search',
-    canActivate: [authGuard],
     loadComponent: () => import('./features/search/search.component').then(m => m.SearchComponent)
   },
 

@@ -24,13 +24,13 @@ import { AuthService } from './core/services/auth.service';
       <span class="spacer"></span>
 
       <a mat-button routerLink="/catalog" routerLinkActive="active-link">Catalog</a>
+      <a mat-button routerLink="/search" routerLinkActive="active-link">
+        <mat-icon>search</mat-icon> Sermon Search
+      </a>
 
       @if (auth.isLoggedIn()) {
         <a mat-button routerLink="/my/checkouts" routerLinkActive="active-link">My Checkouts</a>
         <a mat-button routerLink="/my/reservations" routerLinkActive="active-link">My Reservations</a>
-        <a mat-button routerLink="/search" routerLinkActive="active-link">
-          <mat-icon>search</mat-icon> Sermon Search
-        </a>
       }
 
       @if (auth.isMinisterOrAdmin()) {
