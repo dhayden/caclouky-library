@@ -182,14 +182,13 @@ if (app.Environment.IsDevelopment())
 if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseCors("LibraryCors");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
-// Serve Angular SPA static files (production)
-app.UseDefaultFiles();
-app.UseStaticFiles();
 app.MapFallbackToFile("index.html");
 
 app.Run();

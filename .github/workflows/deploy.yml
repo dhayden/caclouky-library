@@ -71,7 +71,7 @@ jobs:
             export Jwt__Issuer='http://212.56.44.143'
             export Jwt__Audience='http://212.56.44.143'
             export Gemini__ApiKey='${{ secrets.GEMINI_API_KEY }}'
-            export ASPNETCORE_URLS='http://0.0.0.0:8080'
+            export ASPNETCORE_URLS='http://0.0.0.0:6080'
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
