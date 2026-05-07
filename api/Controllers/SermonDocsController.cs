@@ -73,12 +73,20 @@ public class SermonDocsController : ControllerBase
         if (_status.IsRunning)
             return Conflict(new { message = "Indexing already in progress.", _status.Completed, _status.Total });
 
-        var files    = Directory.GetFiles(_indexer.StoragePath, "*.pdf");
-        var existing = await _db.PdfDocuments.Select(d => d.FileName).ToListAsync();
+        var files = Directory.GetFiles(_indexer.StoragePath, "*.pdf");
 
+        // Delete any partial records so unindexed files get reprocessed cleanly
+        var unindexed = await _db.PdfDocuments.Where(d => !d.IsIndexed).ToListAsync();
+        if (unindexed.Count > 0)
+        {
+            _db.PdfDocuments.RemoveRange(unindexed);
+            await _db.SaveChangesAsync();
+        }
+
+        var indexed  = await _db.PdfDocuments.Select(d => d.FileName).ToListAsync();
         var newFiles = files
             .Select(f => (Path: f, Name: Path.GetFileName(f)))
-            .Where(f => !existing.Contains(f.Name))
+            .Where(f => !indexed.Contains(f.Name))
             .Select(f => f.Path)
             .ToList();
 
