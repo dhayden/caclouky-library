@@ -61,7 +61,7 @@ jobs:
           tar -czf deploy.tar.gz -C publish .
           scp -i ~/.ssh/deploy_key -P 2222 deploy.tar.gz dhayden@212.56.44.143:/home/dhayden/deploy.tar.gz
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "find ~/caclouky -mindepth 1 -maxdepth 1 ! -name sermon-pdfs -exec rm -rf {} + && tar -xzf ~/deploy.tar.gz --no-same-permissions -C ~/caclouky && rm ~/deploy.tar.gz && echo extracted"
+            "find ~/caclouky -mindepth 1 -maxdepth 1 ! -name sermon-pdfs ! -name 'caclouky.db*' -exec rm -rf {} + && tar -xzf ~/deploy.tar.gz --no-same-permissions -C ~/caclouky && rm ~/deploy.tar.gz && echo extracted"
 
       - name: Start app
         run: |
