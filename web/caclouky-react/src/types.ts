@@ -1,0 +1,92 @@
+export interface AuthUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  roles: string[];
+}
+
+export interface Book {
+  id: number;
+  isbn: string;
+  title: string;
+  author: string;
+  genre?: string;
+  publisher?: string;
+  publishedYear?: number;
+  description?: string;
+  coverImageUrl?: string;
+  totalCopies: number;
+  availableCopies: number;
+  isRestricted: boolean;
+}
+
+export interface BooksResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  books: Book[];
+}
+
+export interface Checkout {
+  id: number;
+  checkedOutAt: string;
+  dueDate: string;
+  returnedAt?: string;
+  isReturned: boolean;
+  lateFee?: number;
+  book: { id: number; title: string; author: string };
+  user: { id: string; firstName: string; lastName: string; email: string };
+}
+
+export interface Reservation {
+  id: number;
+  reservedAt: string;
+  availableAt?: string;
+  status: 'Pending' | 'Ready' | 'Fulfilled' | 'Cancelled';
+  book: { id: number; title: string; author: string };
+  user: { id: string; firstName: string; lastName: string };
+}
+
+export interface Member {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  memberSince: string;
+  isActive: boolean;
+  roles: string[];
+}
+
+export interface SermonDoc {
+  id: number;
+  title: string;
+  fileName: string;
+  pageCount: number;
+  uploadedAt: string;
+  isIndexed: boolean;
+  indexedAt: string | null;
+}
+
+export interface IndexStatus {
+  isRunning: boolean;
+  total: number;
+  completed: number;
+  failed: number;
+  currentFile: string;
+  startedAt: string | null;
+  errors: string[];
+}
+
+export interface Citation {
+  documentTitle: string;
+  fileName: string;
+  pageNumber: number;
+}
+
+export interface ChatResponse {
+  answer: string;
+  citations: Citation[];
+}
