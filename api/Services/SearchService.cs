@@ -11,19 +11,21 @@ public record SearchResult(string Answer, IReadOnlyList<Citation> Citations);
 public class SearchService
 {
     private readonly LibraryDbContext _db;
+    private readonly OllamaService _ollama;
     private readonly GeminiService _gemini;
     private const int TopK = 5;
 
-    public SearchService(LibraryDbContext db, GeminiService gemini)
+    public SearchService(LibraryDbContext db, OllamaService ollama, GeminiService gemini)
     {
         _db     = db;
+        _ollama = ollama;
         _gemini = gemini;
     }
 
     public async Task<SearchResult> AskAsync(string question)
     {
-        // 1. Embed the question
-        var questionEmbedding = await _gemini.GetEmbeddingAsync(question);
+        // 1. Embed the question locally via Ollama (free, no quota)
+        var questionEmbedding = await _ollama.GetEmbeddingAsync(question);
 
         // 2. Load all chunks with their embeddings and document info
         var chunks = await _db.PdfChunks

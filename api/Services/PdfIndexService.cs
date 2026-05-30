@@ -9,15 +9,15 @@ namespace CacloukyLibrary.Services;
 public class PdfIndexService
 {
     private readonly LibraryDbContext _db;
-    private readonly GeminiService _gemini;
+    private readonly OllamaService _ollama;
     private readonly string _storageDir;
     private const int ChunkSize    = 500;  // words per chunk
     private const int ChunkOverlap = 50;   // word overlap between chunks
 
-    public PdfIndexService(LibraryDbContext db, GeminiService gemini, IConfiguration config, IWebHostEnvironment env)
+    public PdfIndexService(LibraryDbContext db, OllamaService ollama, IConfiguration config, IWebHostEnvironment env)
     {
         _db         = db;
-        _gemini     = gemini;
+        _ollama     = ollama;
         _storageDir = Path.Combine(env.ContentRootPath, config["SermonPdfs:StoragePath"] ?? "sermon-pdfs");
         Directory.CreateDirectory(_storageDir);
     }
@@ -75,7 +75,7 @@ public class PdfIndexService
         var chunks = BuildChunks(pageTexts);
         foreach (var (page, chunkIndex, text) in chunks)
         {
-            var embedding     = await _gemini.GetEmbeddingAsync(text);
+            var embedding     = await _ollama.GetEmbeddingAsync(text);
             var embeddingJson = JsonSerializer.Serialize(embedding);
             _db.PdfChunks.Add(new PdfChunk
             {
@@ -85,8 +85,6 @@ public class PdfIndexService
                 Content    = text,
                 Embedding  = embeddingJson
             });
-            // Small delay to stay within free-tier rate limits
-            await Task.Delay(500);
         }
 
         doc.IsIndexed = true;

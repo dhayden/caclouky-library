@@ -93,6 +93,8 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── Sermon Search Services ────────────────────────────────────────────────────
+// Ollama handles embeddings locally (free, no quota). Gemini handles chat answers only.
+builder.Services.AddHttpClient<CacloukyLibrary.Services.OllamaService>();
 builder.Services.AddHttpClient<CacloukyLibrary.Services.GeminiService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.PdfIndexService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.SearchService>();
