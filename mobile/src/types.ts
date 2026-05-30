@@ -95,3 +95,22 @@ export interface SearchHistory {
   type: string;
   createdAt: string;
 }
+
+export interface UserHighlight {
+  id: number;
+  sourceType: string;
+  sourceRef: string;
+  selectedText: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface UserNote {
+  id: number;
+  title: string;
+  content: string;
+  sourceType?: string;
+  sourceRef?: string;
+  createdAt: string;
+  updatedAt: string;
+}

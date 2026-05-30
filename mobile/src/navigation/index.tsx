@@ -7,6 +7,7 @@ import LoginScreen from '../screens/LoginScreen';
 import SermonSearchScreen from '../screens/SermonSearchScreen';
 import PdfViewerScreen from '../screens/PdfViewerScreen';
 import BibleScreen from '../screens/BibleScreen';
+import NotesScreen from '../screens/NotesScreen';
 import AccountScreen from '../screens/AccountScreen';
 import type { SermonStackParamList } from './types';
 
@@ -27,6 +28,7 @@ function AuthenticatedTabs() {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Sermons" component={SermonNavigator} options={{ tabBarIcon: () => <Text>🎙</Text> }} />
       <Tab.Screen name="Bible" component={BibleScreen} options={{ tabBarIcon: () => <Text>📖</Text>, headerShown: true, headerTitle: 'King James Bible' }} />
+      <Tab.Screen name="Notes" component={NotesScreen} options={{ tabBarIcon: () => <Text>📝</Text>, headerShown: true, headerTitle: 'My Notes' }} />
       <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarIcon: () => <Text>👤</Text>, headerShown: true }} />
     </Tab.Navigator>
   );

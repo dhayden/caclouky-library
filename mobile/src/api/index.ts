@@ -49,3 +49,18 @@ export const getSearchHistory = (type?: string) => client.get<SearchHistory[]>('
 export const saveSearchHistory = (query: string, type: string) => client.post('/search-history', { query, type });
 export const deleteSearchHistory = (id: number) => client.delete(`/search-history/${id}`);
 export const clearSearchHistory = () => client.delete('/search-history');
+
+// Highlights
+export const getHighlights = (sourceType?: string, sourceRef?: string) =>
+  client.get<UserHighlight[]>('/highlights', { params: { sourceType, sourceRef } });
+export const createHighlight = (sourceType: string, sourceRef: string, selectedText: string, color?: string) =>
+  client.post<UserHighlight>('/highlights', { sourceType, sourceRef, selectedText, color });
+export const deleteHighlight = (id: number) => client.delete(`/highlights/${id}`);
+
+// Notes
+export const getNotes = () => client.get<UserNote[]>('/notes');
+export const createNote = (data: { title: string; content: string; sourceType?: string; sourceRef?: string }) =>
+  client.post<UserNote>('/notes', data);
+export const updateNote = (id: number, data: { title: string; content: string; sourceType?: string; sourceRef?: string }) =>
+  client.put<UserNote>(`/notes/${id}`, data);
+export const deleteNote = (id: number) => client.delete(`/notes/${id}`);

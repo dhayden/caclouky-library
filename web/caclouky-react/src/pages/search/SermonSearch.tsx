@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Box, Chip, CircularProgress, Divider, Fab, Paper, TextField, Typography,
   Drawer, List, ListItem, ListItemText, ListItemSecondaryAction, IconButton,
-  Dialog, DialogTitle, DialogContent, DialogActions, Button, Tooltip,
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, Tooltip, Stack,
 } from '@mui/material';
-import { Send, History, Delete, Close, MenuBook } from '@mui/icons-material';
+import { Send, History, Delete, Close, MenuBook, Highlight, NoteAdd } from '@mui/icons-material';
 import type { Citation, ScriptureRef, SearchHistory, BibleVerse, UserHighlight } from '../../types';
 import * as api from '../../api';
 import { useAuth } from '../../auth/AuthContext';
@@ -23,7 +23,13 @@ const SUGGESTIONS = [
   "What are his teachings on the church order?",
 ];
 
-const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
+const HIGHLIGHT_COLORS = [
+  { color: '#FFD700', label: 'Yellow' },
+  { color: '#90EE90', label: 'Green' },
+  { color: '#87CEEB', label: 'Blue' },
+  { color: '#FFB6C1', label: 'Pink' },
+  { color: '#DDA0DD', label: 'Purple' },
+];
 
 export default function SermonSearch() {
   const { isLoggedIn } = useAuth();
@@ -34,6 +40,10 @@ export default function SermonSearch() {
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [scripture, setScripture] = useState<{ ref: ScriptureRef; verses: BibleVerse[] } | null>(null);
   const [highlights, setHighlights] = useState<UserHighlight[]>([]);
+  const [highlightPicker, setHighlightPicker] = useState<{ msgIndex: number } | null>(null);
+  const [noteDialog, setNoteDialog] = useState<{ text: string } | null>(null);
+  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
+  const [selectedText, setSelectedText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -61,10 +71,8 @@ export default function SermonSearch() {
     try {
       const res = await api.chatSearch(question);
       setMessages(m => [...m, {
-        role: 'ai',
-        text: res.data.answer,
-        citations: res.data.citations,
-        scriptures: res.data.scriptures,
+        role: 'ai', text: res.data.answer,
+        citations: res.data.citations, scriptures: res.data.scriptures,
       }]);
     } catch {
       setMessages(m => [...m, { role: 'ai', text: 'Sorry, something went wrong. Please try again.', error: true }]);
@@ -82,22 +90,37 @@ export default function SermonSearch() {
     }
   };
 
-  const handleHighlight = async () => {
-    const sel = window.getSelection();
-    if (!sel || !sel.toString().trim() || !isLoggedIn()) return;
-    const text = sel.toString().trim();
-    const color = HIGHLIGHT_COLORS[highlights.length % HIGHLIGHT_COLORS.length];
-    await api.createHighlight('sermon', 'search', text, color);
-    loadHighlights();
+  const captureSelection = () => {
+    const sel = window.getSelection()?.toString().trim();
+    if (sel) setSelectedText(sel);
   };
 
-  const applyHighlight = (text: string) => {
+  const applyHighlight = async (color: string) => {
+    const text = selectedText || (highlightPicker ? messages[highlightPicker.msgIndex]?.text : '');
+    if (!text) return;
+    await api.createHighlight('sermon', 'search', text.slice(0, 500), color);
+    loadHighlights();
+    setHighlightPicker(null);
+    setSelectedText('');
+  };
+
+  const openNoteDialog = (prefill: string) => {
+    setNoteForm({ title: 'Sermon Note', content: prefill });
+    setNoteDialog({ text: prefill });
+  };
+
+  const saveNote = async () => {
+    await api.createNote({ title: noteForm.title, content: noteForm.content, sourceType: 'sermon' });
+    setNoteDialog(null);
+  };
+
+  const applyHighlightToText = (text: string) => {
     let result = text;
     for (const h of highlights) {
-      if (result.includes(h.selectedText)) {
+      if (h.selectedText && result.includes(h.selectedText)) {
         result = result.replace(
           h.selectedText,
-          `<mark style="background:${h.color};border-radius:2px">${h.selectedText}</mark>`
+          `<mark style="background:${h.color};border-radius:2px;padding:1px 2px">${h.selectedText}</mark>`
         );
       }
     }
@@ -114,15 +137,13 @@ export default function SermonSearch() {
         </Box>
         {isLoggedIn() && (
           <Tooltip title="Search history">
-            <IconButton onClick={() => { setHistoryOpen(true); loadHistory(); }}>
-              <History />
-            </IconButton>
+            <IconButton onClick={() => { setHistoryOpen(true); loadHistory(); }}><History /></IconButton>
           </Tooltip>
         )}
       </Box>
 
       {/* Messages */}
-      <Box flex={1} overflow="auto" px={3} pb={2} onMouseUp={handleHighlight}>
+      <Box flex={1} overflow="auto" px={3} pb={2} onMouseUp={captureSelection}>
         {messages.length === 0 ? (
           <Box py={4}>
             <Typography variant="body2" color="text.secondary" mb={2}>Suggested questions:</Typography>
@@ -138,14 +159,35 @@ export default function SermonSearch() {
                   <Typography variant="body1">{msg.text}</Typography>
                 </Paper>
               ) : (
-                <Box maxWidth="80%">
+                <Box maxWidth="82%">
                   <Typography variant="caption" color="text.secondary" mb={0.5} display="block">AI Answer</Typography>
                   <Paper variant="outlined" sx={{ px: 2, py: 1.5, borderRadius: 3 }}>
                     <Typography
                       variant="body1"
                       color={msg.error ? 'error' : 'inherit'}
-                      dangerouslySetInnerHTML={{ __html: applyHighlight(msg.text) }}
+                      dangerouslySetInnerHTML={{ __html: applyHighlightToText(msg.text) }}
+                      sx={{ userSelect: 'text' }}
                     />
+
+                    {/* Action bar — highlight + note buttons */}
+                    {isLoggedIn() && !msg.error && (
+                      <Stack direction="row" spacing={1} mt={1.5}>
+                        <Button
+                          size="small" variant="outlined" startIcon={<Highlight />}
+                          onClick={() => setHighlightPicker({ msgIndex: i })}
+                          sx={{ fontSize: 11 }}
+                        >
+                          Highlight
+                        </Button>
+                        <Button
+                          size="small" variant="outlined" startIcon={<NoteAdd />}
+                          onClick={() => openNoteDialog(msg.text.slice(0, 300))}
+                          sx={{ fontSize: 11 }}
+                        >
+                          Add Note
+                        </Button>
+                      </Stack>
+                    )}
 
                     {/* Sermon citations */}
                     {msg.citations && msg.citations.length > 0 && (
@@ -170,15 +212,7 @@ export default function SermonSearch() {
                         </Box>
                         <Box display="flex" gap={0.5} flexWrap="wrap">
                           {msg.scriptures.map((s, j) => (
-                            <Chip
-                              key={j}
-                              label={s.reference}
-                              size="small"
-                              variant="outlined"
-                              color="primary"
-                              clickable
-                              onClick={() => openScripture(s)}
-                            />
+                            <Chip key={j} label={s.reference} size="small" variant="outlined" color="primary" clickable onClick={() => openScripture(s)} />
                           ))}
                         </Box>
                       </>
@@ -218,9 +252,7 @@ export default function SermonSearch() {
             <Typography variant="h6">Search History</Typography>
             <Box display="flex" gap={1}>
               {history.length > 0 && (
-                <Button size="small" color="error" onClick={async () => { await api.clearSearchHistory(); loadHistory(); }}>
-                  Clear all
-                </Button>
+                <Button size="small" color="error" onClick={async () => { await api.clearSearchHistory(); loadHistory(); }}>Clear all</Button>
               )}
               <IconButton size="small" onClick={() => setHistoryOpen(false)}><Close /></IconButton>
             </Box>
@@ -241,6 +273,59 @@ export default function SermonSearch() {
         </Box>
       </Drawer>
 
+      {/* Highlight color picker */}
+      <Dialog open={!!highlightPicker} onClose={() => setHighlightPicker(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Choose Highlight Color</DialogTitle>
+        <DialogContent>
+          {selectedText && (
+            <Typography variant="body2" color="text.secondary" mb={2} sx={{ fontStyle: 'italic' }}>
+              "{selectedText.slice(0, 100)}{selectedText.length > 100 ? '…' : ''}"
+            </Typography>
+          )}
+          {!selectedText && (
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Select text in the answer first, then choose a color — or highlight the full response:
+            </Typography>
+          )}
+          <Box display="flex" gap={1} flexWrap="wrap">
+            {HIGHLIGHT_COLORS.map(h => (
+              <Button
+                key={h.color}
+                variant="contained"
+                onClick={() => applyHighlight(h.color)}
+                sx={{ bgcolor: h.color, color: '#333', '&:hover': { bgcolor: h.color, opacity: 0.85 }, minWidth: 80 }}
+              >
+                {h.label}
+              </Button>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHighlightPicker(null)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add note dialog */}
+      <Dialog open={!!noteDialog} onClose={() => setNoteDialog(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Note</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={2} pt={1}>
+            <TextField
+              label="Title" fullWidth value={noteForm.title}
+              onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))}
+            />
+            <TextField
+              label="Note" multiline rows={5} fullWidth value={noteForm.content}
+              onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNoteDialog(null)}>Cancel</Button>
+          <Button variant="contained" onClick={saveNote} disabled={!noteForm.title || !noteForm.content}>Save Note</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Scripture popup */}
       <Dialog open={!!scripture} onClose={() => setScripture(null)} maxWidth="sm" fullWidth>
         <DialogTitle>{scripture?.ref.reference}</DialogTitle>
@@ -250,9 +335,7 @@ export default function SermonSearch() {
           ) : (
             scripture?.verses.map(v => (
               <Box key={v.id} mb={1}>
-                <Typography component="span" variant="caption" fontWeight="bold" color="primary.main" mr={1}>
-                  {v.verse}
-                </Typography>
+                <Typography component="span" variant="caption" fontWeight="bold" color="primary.main" mr={1}>{v.verse}</Typography>
                 <Typography component="span" variant="body1">{v.text}</Typography>
               </Box>
             ))

@@ -9,6 +9,9 @@ import type { Citation, ScriptureRef, SearchHistory, BibleVerse } from '../types
 import * as api from '../api';
 import { useAuth } from '../context/AuthContext';
 
+const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
+const HIGHLIGHT_LABELS = ['Yellow', 'Green', 'Blue', 'Pink', 'Purple'];
+
 type Props = NativeStackScreenProps<SermonStackParamList, 'SermonSearch'>;
 
 interface Message {
@@ -33,6 +36,9 @@ export default function SermonSearchScreen({ navigation }: Props) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [scripture, setScripture] = useState<{ ref: ScriptureRef; verses: BibleVerse[] } | null>(null);
+  const [highlightPicker, setHighlightPicker] = useState<{ text: string } | null>(null);
+  const [noteModal, setNoteModal] = useState<{ prefill: string } | null>(null);
+  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   const scrollRef = useRef<ScrollView>(null);
 
   const loadHistory = useCallback(async () => {
@@ -108,6 +114,18 @@ export default function SermonSearchScreen({ navigation }: Props) {
             <Text style={[styles.bubbleText, msg.role === 'user' && styles.bubbleTextUser, msg.error && styles.bubbleError]}>
               {msg.text}
             </Text>
+
+            {/* Highlight + Note buttons */}
+            {user && !msg.error && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => setHighlightPicker({ text: msg.text.slice(0, 500) })}>
+                  <Text style={styles.actionBtnText}>🖊 Highlight</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => { setNoteForm({ title: 'Sermon Note', content: msg.text.slice(0, 300) }); setNoteModal({ prefill: msg.text }); }}>
+                  <Text style={styles.actionBtnText}>📝 Add Note</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Sermon citations */}
             {msg.citations && msg.citations.length > 0 && (
@@ -194,6 +212,62 @@ export default function SermonSearchScreen({ navigation }: Props) {
         </View>
       </Modal>
 
+      {/* Highlight color picker */}
+      <Modal visible={!!highlightPicker} animationType="fade" transparent onRequestClose={() => setHighlightPicker(null)}>
+        <View style={styles.overlay}>
+          <View style={styles.scriptureModal}>
+            <Text style={styles.scriptureTitle}>Choose Highlight Color</Text>
+            <View style={styles.colorRow}>
+              {HIGHLIGHT_COLORS.map((color, i) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[styles.colorSwatch, { backgroundColor: color }]}
+                  onPress={async () => {
+                    if (highlightPicker?.text) {
+                      await api.createHighlight('sermon', 'search', highlightPicker.text, color);
+                    }
+                    setHighlightPicker(null);
+                    Alert.alert('Saved', 'Highlight saved.');
+                  }}
+                >
+                  <Text style={styles.colorLabel}>{HIGHLIGHT_LABELS[i]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.closeScriptureBtn} onPress={() => setHighlightPicker(null)}>
+              <Text style={styles.closeScriptureBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add note modal */}
+      <Modal visible={!!noteModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setNoteModal(null)}>
+        <View style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add Note</Text>
+            <TouchableOpacity onPress={() => setNoteModal(null)}>
+              <Text style={styles.closeBtn}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.noteLabel}>Title</Text>
+          <TextInput style={styles.noteInput} value={noteForm.title} onChangeText={v => setNoteForm(f => ({ ...f, title: v }))} placeholder="Note title…" />
+          <Text style={styles.noteLabel}>Note</Text>
+          <TextInput style={[styles.noteInput, styles.noteInputMulti]} value={noteForm.content} onChangeText={v => setNoteForm(f => ({ ...f, content: v }))} placeholder="Write your note…" multiline />
+          <TouchableOpacity
+            style={[styles.saveNoteBtn, (!noteForm.title || !noteForm.content) && styles.sendBtnDisabled]}
+            disabled={!noteForm.title || !noteForm.content}
+            onPress={async () => {
+              await api.createNote({ title: noteForm.title, content: noteForm.content, sourceType: 'sermon' });
+              setNoteModal(null);
+              Alert.alert('Saved', 'Note saved.');
+            }}
+          >
+            <Text style={styles.closeScriptureBtnText}>Save Note</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       {/* Scripture popup */}
       <Modal visible={!!scripture} animationType="fade" transparent onRequestClose={() => setScripture(null)}>
         <View style={styles.overlay}>
@@ -244,6 +318,16 @@ const styles = StyleSheet.create({
   scriptureChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   scriptureChip: { backgroundColor: '#e3f2fd', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: '#90caf9' },
   scriptureChipText: { fontSize: 11, color: '#1565c0' },
+  actionRow: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 4 },
+  actionBtn: { backgroundColor: '#e3f2fd', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#90caf9' },
+  actionBtnText: { fontSize: 12, color: '#1565c0', fontWeight: '600' },
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 12 },
+  colorSwatch: { width: 70, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  colorLabel: { fontSize: 11, fontWeight: '600', color: '#333' },
+  noteLabel: { fontSize: 13, color: '#666', marginTop: 12, marginBottom: 4 },
+  noteInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 15 },
+  noteInputMulti: { minHeight: 140, textAlignVertical: 'top' },
+  saveNoteBtn: { marginTop: 20, backgroundColor: '#1976d2', borderRadius: 8, padding: 14, alignItems: 'center' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   loadingText: { fontSize: 13, color: '#888' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff' },
