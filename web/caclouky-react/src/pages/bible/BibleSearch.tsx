@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Box, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  Button, Divider, FormControl, InputLabel, MenuItem, Paper, Select,
-  TextField, Typography, IconButton, Tooltip,
+  Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
+  DialogTitle, Divider, FormControl, IconButton, InputLabel, Link, MenuItem,
+  Paper, Select, TextField, Tooltip, Typography,
 } from '@mui/material';
-import { Search, History, Delete, Close, Bookmark } from '@mui/icons-material';
-import type { BibleVerse, SearchHistory, UserHighlight } from '../../types';
+import { Search, NoteAdd, History, Delete, Close, Bookmark } from '@mui/icons-material';
+import type { BibleVerse, SearchHistory, UserNote } from '../../types';
 import * as api from '../../api';
 import { useAuth } from '../../auth/AuthContext';
+
+type CrossRef = { documentTitle: string; fileName: string; pageNumber: number };
+type NoteRef  = { id: number; title: string; content: string; updatedAt: string };
 
 const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
 
@@ -16,22 +19,24 @@ export default function BibleSearch() {
   const [books, setBooks] = useState<string[]>([]);
   const [selectedBook, setSelectedBook] = useState('');
   const [selectedChapter, setSelectedChapter] = useState(1);
-  const [chapterVerses, setChapterVerses] = useState<BibleVerse[]>([]);
+  const [verses, setVerses] = useState<BibleVerse[]>([]);
+  const [crossRefs, setCrossRefs] = useState<Record<number, CrossRef[]>>({});
+  const [chapterNotes, setChapterNotes] = useState<Record<number, NoteRef[]>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<BibleVerse[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [highlights, setHighlights] = useState<UserHighlight[]>([]);
-  const [verseDialog, setVerseDialog] = useState<BibleVerse | null>(null);
+  const [noteDialog, setNoteDialog] = useState<{ verseNum: number; verseText: string } | null>(null);
+  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
+  const [highlightVerse, setHighlightVerse] = useState<{ verseNum: number; text: string } | null>(null);
 
-  useEffect(() => { api.getBibleBooks().then(r => { setBooks(r.data); if (r.data.length) setSelectedBook(r.data[0]); }); }, []);
-
-  const loadHighlights = useCallback(async () => {
-    if (!isLoggedIn()) return;
-    const res = await api.getHighlights('bible');
-    setHighlights(res.data);
-  }, [isLoggedIn]);
+  useEffect(() => {
+    api.getBibleBooks().then(r => {
+      setBooks(r.data);
+      if (r.data.length) setSelectedBook(r.data[0]);
+    });
+  }, []);
 
   const loadHistory = useCallback(async () => {
     if (!isLoggedIn()) return;
@@ -39,20 +44,30 @@ export default function BibleSearch() {
     setHistory(res.data);
   }, [isLoggedIn]);
 
-  useEffect(() => { loadHighlights(); loadHistory(); }, [loadHighlights, loadHistory]);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
+  // Load chapter + cross-refs + notes whenever book/chapter changes
   useEffect(() => {
-    if (!selectedBook) return;
+    if (!selectedBook || searchResults) return;
     setLoading(true);
-    api.getBibleChapter(selectedBook, selectedChapter)
-      .then(r => setChapterVerses(r.data))
-      .catch(() => setChapterVerses([]))
-      .finally(() => setLoading(false));
-  }, [selectedBook, selectedChapter]);
+    setCrossRefs({});
+    setChapterNotes({});
+
+    const chapterP = api.getBibleChapter(selectedBook, selectedChapter)
+      .then(r => setVerses(r.data));
+    const refsP = api.getBibleCrossReferences(selectedBook, selectedChapter)
+      .then(r => setCrossRefs(r.data as any));
+    const notesP = isLoggedIn()
+      ? api.getBibleChapterNotes(selectedBook, selectedChapter).then(r => setChapterNotes(r.data as any))
+      : Promise.resolve();
+
+    Promise.all([chapterP, refsP, notesP]).finally(() => setLoading(false));
+  }, [selectedBook, selectedChapter, searchResults, isLoggedIn]);
 
   const doSearch = async (q: string) => {
     if (!q.trim()) return;
     setLoading(true);
+    setSearchResults(null);
     if (isLoggedIn()) api.saveSearchHistory(q, 'bible').then(loadHistory);
     try {
       const res = await api.searchBible(q);
@@ -62,129 +77,188 @@ export default function BibleSearch() {
     }
   };
 
-  const highlight = async (verse: BibleVerse) => {
-    if (!isLoggedIn()) return;
-    const ref = `${verse.book}:${verse.chapter}:${verse.verse}`;
-    const color = HIGHLIGHT_COLORS[highlights.length % HIGHLIGHT_COLORS.length];
-    await api.createHighlight('bible', ref, verse.text, color);
-    loadHighlights();
+  const clearSearch = () => { setSearchResults(null); setSearchQuery(''); };
+
+  const saveNote = async () => {
+    if (!noteDialog) return;
+    const ref = `${selectedBook}:${selectedChapter}:${noteDialog.verseNum}`;
+    await api.createNote({ title: noteForm.title, content: noteForm.content, sourceType: 'bible', sourceRef: ref });
+    setNoteDialog(null);
+    // Reload notes for chapter
+    if (isLoggedIn()) {
+      api.getBibleChapterNotes(selectedBook, selectedChapter).then(r => setChapterNotes(r.data as any));
+    }
   };
 
-  const isHighlighted = (verse: BibleVerse) =>
-    highlights.find(h => h.sourceRef === `${verse.book}:${verse.chapter}:${verse.verse}`);
+  const saveHighlight = async (color: string) => {
+    if (!highlightVerse) return;
+    const ref = `${selectedBook}:${selectedChapter}:${highlightVerse.verseNum}`;
+    await api.createHighlight('bible', ref, highlightVerse.text, color);
+    setHighlightVerse(null);
+  };
 
-  const maxChapter = chapterVerses.length > 0 ? (chapterVerses[chapterVerses.length - 1]?.chapter ?? selectedChapter) : selectedChapter;
-
-  const verses = searchResults ?? chapterVerses;
+  const displayVerses = searchResults ?? verses;
 
   return (
-    <Box p={3}>
-      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3}>
-        <Typography variant="h5" fontWeight="bold">King James Bible</Typography>
-        {isLoggedIn() && (
-          <Tooltip title="Search history">
-            <IconButton onClick={() => { setHistoryOpen(true); loadHistory(); }}><History /></IconButton>
-          </Tooltip>
-        )}
-      </Box>
-
-      {/* Search bar */}
-      <Box display="flex" gap={1} mb={3}>
-        <TextField
-          fullWidth size="small" placeholder="Search for a word or phrase…"
-          value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { setSearchResults(null); doSearch(searchQuery); } }}
-        />
-        <Button variant="contained" startIcon={<Search />} onClick={() => doSearch(searchQuery)} disabled={loading}>
-          Search
-        </Button>
-        {searchResults && (
-          <Button variant="outlined" onClick={() => { setSearchResults(null); setSearchQuery(''); }}>
-            Clear
-          </Button>
-        )}
-      </Box>
-
-      {/* Book + chapter nav (shown when not searching) */}
-      {!searchResults && (
-        <Box display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
+    <Box p={3} height="calc(100vh - 64px)" display="flex" flexDirection="column">
+      {/* Controls */}
+      <Box display="flex" gap={1} mb={2} flexWrap="wrap" alignItems="center">
+        {/* Book selector */}
+        {!searchResults && (
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Book</InputLabel>
             <Select value={selectedBook} label="Book" onChange={e => { setSelectedBook(e.target.value); setSelectedChapter(1); }}>
               {books.map(b => <MenuItem key={b} value={b}>{b}</MenuItem>)}
             </Select>
           </FormControl>
-          <Box display="flex" alignItems="center" gap={1}>
+        )}
+
+        {/* Chapter nav */}
+        {!searchResults && (
+          <Box display="flex" alignItems="center" gap={0.5}>
             <Button size="small" disabled={selectedChapter <= 1} onClick={() => setSelectedChapter(c => c - 1)}>‹</Button>
-            <Typography variant="body2">Chapter {selectedChapter}</Typography>
+            <Typography variant="body2" sx={{ minWidth: 80, textAlign: 'center' }}>
+              Chapter {selectedChapter}
+            </Typography>
             <Button size="small" onClick={() => setSelectedChapter(c => c + 1)}>›</Button>
           </Box>
+        )}
+
+        <Box flex={1} />
+
+        {/* Search */}
+        <Box display="flex" gap={1} alignItems="center">
+          <TextField
+            size="small" placeholder="Search verses…" value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && doSearch(searchQuery)}
+            sx={{ width: 220 }}
+          />
+          <Button variant="contained" size="small" startIcon={<Search />} onClick={() => doSearch(searchQuery)}>Search</Button>
+          {searchResults && <Button size="small" onClick={clearSearch}>Clear</Button>}
+          {isLoggedIn() && (
+            <Tooltip title="Search history">
+              <IconButton size="small" onClick={() => { setHistoryOpen(true); loadHistory(); }}><History /></IconButton>
+            </Tooltip>
+          )}
         </Box>
-      )}
+      </Box>
 
       {searchResults && (
-        <Typography variant="body2" color="text.secondary" mb={2}>
+        <Typography variant="body2" color="text.secondary" mb={1}>
           {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
         </Typography>
       )}
 
+      {/* Two-column verse layout */}
       {loading ? (
         <Box display="flex" justifyContent="center" py={8}><CircularProgress /></Box>
       ) : (
-        <Paper variant="outlined">
-          {verses.map((v, i) => {
-            const hl = isHighlighted(v);
-            return (
-              <Box key={v.id}>
-                {i > 0 && searchResults && <Divider />}
-                <Box
-                  px={2} py={1.5}
-                  display="flex" gap={1.5} alignItems="flex-start"
-                  sx={{ bgcolor: hl ? hl.color + '44' : 'transparent', cursor: 'pointer', '&:hover': { bgcolor: hl ? hl.color + '66' : 'action.hover' } }}
-                  onClick={() => setVerseDialog(v)}
-                >
-                  <Typography variant="caption" color="primary.main" fontWeight="bold" minWidth={searchResults ? 120 : 24} mt={0.3}>
-                    {searchResults ? `${v.book} ${v.chapter}:${v.verse}` : v.verse}
-                  </Typography>
-                  <Typography variant="body1" flex={1}>{v.text}</Typography>
-                  {isLoggedIn() && (
-                    <Tooltip title={hl ? 'Highlighted' : 'Highlight verse'}>
-                      <IconButton size="small" onClick={e => { e.stopPropagation(); highlight(v); }}>
-                        <Bookmark fontSize="small" color={hl ? 'warning' : 'disabled'} />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </Box>
-              </Box>
-            );
-          })}
-          {verses.length === 0 && (
-            <Box p={4} textAlign="center">
-              <Typography color="text.secondary">
-                {searchResults ? 'No results found.' : 'Loading…'}
+        <Box flex={1} overflow="auto">
+          {/* Column headers */}
+          {!searchResults && (
+            <Box display="grid" gridTemplateColumns="3fr 2fr" gap={2} mb={1} px={1}>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold" textTransform="uppercase">
+                {selectedBook} {selectedChapter} — King James Version
+              </Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold" textTransform="uppercase">
+                Sermon References &amp; Notes
               </Typography>
             </Box>
           )}
-        </Paper>
+
+          {displayVerses.map(v => {
+            const refs  = crossRefs[v.verse] ?? [];
+            const notes = chapterNotes[v.verse] ?? [];
+            const hasRightContent = refs.length > 0 || notes.length > 0;
+
+            return (
+              <Box
+                key={v.id}
+                display="grid"
+                gridTemplateColumns={searchResults ? '1fr' : '3fr 2fr'}
+                gap={2}
+                px={1} py={1}
+                sx={{
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+              >
+                {/* Left: KJV verse */}
+                <Box>
+                  {searchResults && (
+                    <Typography variant="caption" color="primary.main" fontWeight="bold" display="block" mb={0.3}>
+                      {v.book} {v.chapter}:{v.verse}
+                    </Typography>
+                  )}
+                  <Typography variant="body1" lineHeight={1.8}>
+                    <Box component="sup" sx={{ color: 'primary.main', fontWeight: 'bold', fontSize: '0.7em', mr: 0.5 }}>
+                      {v.verse}
+                    </Box>
+                    {v.text}
+                    {isLoggedIn() && !searchResults && (
+                      <Box component="span" ml={1}>
+                        <Tooltip title="Add note for this verse">
+                          <IconButton size="small" sx={{ p: 0.3 }}
+                            onClick={() => { setNoteForm({ title: `${selectedBook} ${selectedChapter}:${v.verse}`, content: '' }); setNoteDialog({ verseNum: v.verse, verseText: v.text }); }}>
+                            <NoteAdd sx={{ fontSize: 14, color: 'text.disabled' }} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Highlight this verse">
+                          <IconButton size="small" sx={{ p: 0.3 }}
+                            onClick={() => setHighlightVerse({ verseNum: v.verse, text: v.text })}>
+                            <Bookmark sx={{ fontSize: 14, color: 'text.disabled' }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    )}
+                  </Typography>
+                </Box>
+
+                {/* Right: sermon refs + notes */}
+                {!searchResults && (
+                  <Box sx={{ borderLeft: '2px solid', borderColor: hasRightContent ? 'primary.light' : 'divider', pl: 1.5 }}>
+                    {refs.map((ref, ri) => (
+                      <Box key={ri} mb={0.5}>
+                        <Link
+                          href={`/api/sermon-docs/page/${ref.fileName}/${ref.pageNumber}`}
+                          target="_blank"
+                          rel="noopener"
+                          variant="caption"
+                          sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                        >
+                          📜 <strong>{ref.documentTitle}</strong>&nbsp;p.{ref.pageNumber}
+                        </Link>
+                      </Box>
+                    ))}
+                    {notes.map((note, ni) => (
+                      <Box key={ni} mt={refs.length > 0 ? 0.5 : 0}>
+                        {ni === 0 && refs.length > 0 && <Divider sx={{ my: 0.5 }} />}
+                        <Tooltip title={note.content}>
+                          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontStyle: 'italic', cursor: 'help' }}>
+                            📝 {note.title}
+                          </Typography>
+                        </Tooltip>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
+
+          {displayVerses.length === 0 && !loading && (
+            <Box py={8} textAlign="center">
+              <Typography color="text.secondary">
+                {selectedBook ? 'No verses found — the KJV Bible may still be loading. Check back in a minute.' : 'Select a book to begin.'}
+              </Typography>
+            </Box>
+          )}
+        </Box>
       )}
 
-      {/* Verse detail dialog */}
-      <Dialog open={!!verseDialog} onClose={() => setVerseDialog(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>{verseDialog && `${verseDialog.book} ${verseDialog.chapter}:${verseDialog.verse}`}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ fontStyle: 'italic', lineHeight: 2 }}>{verseDialog?.text}</Typography>
-        </DialogContent>
-        <DialogActions>
-          {isLoggedIn() && verseDialog && (
-            <Button startIcon={<Bookmark />} onClick={() => { highlight(verseDialog); setVerseDialog(null); }}>
-              Highlight
-            </Button>
-          )}
-          <Button onClick={() => setVerseDialog(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* History drawer */}
+      {/* History dialog */}
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -205,6 +279,44 @@ export default function BibleSearch() {
         </DialogContent>
         <DialogActions>
           {history.length > 0 && <Button color="error" onClick={async () => { await api.clearSearchHistory(); loadHistory(); }}>Clear all</Button>}
+        </DialogActions>
+      </Dialog>
+
+      {/* Add note dialog */}
+      <Dialog open={!!noteDialog} onClose={() => setNoteDialog(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Note for {selectedBook} {selectedChapter}:{noteDialog?.verseNum}</DialogTitle>
+        <DialogContent>
+          {noteDialog && (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
+              <sup>{noteDialog.verseNum}</sup> {noteDialog.verseText}
+            </Typography>
+          )}
+          <Box display="flex" flexDirection="column" gap={2}>
+            <TextField label="Title" fullWidth value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} />
+            <TextField label="Note" multiline rows={4} fullWidth value={noteForm.content} onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))} />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNoteDialog(null)}>Cancel</Button>
+          <Button variant="contained" onClick={saveNote} disabled={!noteForm.title || !noteForm.content}>Save Note</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Highlight color picker */}
+      <Dialog open={!!highlightVerse} onClose={() => setHighlightVerse(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Highlight Verse {selectedChapter}:{highlightVerse?.verseNum}</DialogTitle>
+        <DialogContent>
+          <Box display="flex" gap={1} flexWrap="wrap">
+            {HIGHLIGHT_COLORS.map((color, i) => (
+              <Button key={color} variant="contained" onClick={() => saveHighlight(color)}
+                sx={{ bgcolor: color, color: '#333', '&:hover': { bgcolor: color, opacity: 0.85 } }}>
+                {['Yellow', 'Green', 'Blue', 'Pink', 'Purple'][i]}
+              </Button>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHighlightVerse(null)}>Cancel</Button>
         </DialogActions>
       </Dialog>
     </Box>

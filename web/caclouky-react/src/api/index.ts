@@ -60,6 +60,14 @@ export const searchBible = (q: string, limit = 30) => client.get<BibleVerse[]>('
 export const getBibleChapter = (book: string, chapter: number) => client.get<BibleVerse[]>(`/bible/${encodeURIComponent(book)}/${chapter}`);
 export const getBibleVerses = (book: string, chapter: number, verseStart: number, verseEnd: number) =>
   client.get<BibleVerse[]>(`/bible/${encodeURIComponent(book)}/${chapter}/${verseStart}/${verseEnd}`);
+export const getBibleCrossReferences = (book: string, chapter: number) =>
+  client.get<Record<string, { documentTitle: string; fileName: string; pageNumber: number }[]>>(
+    `/bible/${encodeURIComponent(book)}/${chapter}/cross-references`
+  );
+export const getBibleChapterNotes = (book: string, chapter: number) =>
+  client.get<Record<string, { id: number; title: string; content: string; updatedAt: string }[]>>(
+    `/bible/${encodeURIComponent(book)}/${chapter}/notes`
+  );
 
 // Search history
 export const getSearchHistory = (type?: string) => client.get<SearchHistory[]>('/search-history', { params: { type } });
