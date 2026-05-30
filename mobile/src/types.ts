@@ -47,3 +47,26 @@ export interface Reservation {
   book: { id: number; title: string; author: string };
   user: { id: string; firstName: string; lastName: string };
 }
+
+export interface Member {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  memberSince: string;
+  isActive: boolean;
+  roles: string[];
+}
+
+export interface Citation {
+  documentTitle: string;
+  fileName: string;
+  pageNumber: number;
+}
+
+export interface ChatResponse {
+  answer: string;
+  citations: Citation[];
+}
