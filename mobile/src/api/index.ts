@@ -36,3 +36,16 @@ export const getSermonPage = (fileName: string, pageNumber: number) =>
   client.get<{ title: string; fileName: string; pageNumber: number; pageCount: number; text: string }>(
     `/sermon-docs/page/${encodeURIComponent(fileName)}/${pageNumber}`
   );
+
+// Bible
+export const getBibleBooks = () => client.get<string[]>('/bible/books');
+export const searchBible = (q: string, limit = 30) => client.get<BibleVerse[]>('/bible/search', { params: { q, limit } });
+export const getBibleChapter = (book: string, chapter: number) => client.get<BibleVerse[]>(`/bible/${encodeURIComponent(book)}/${chapter}`);
+export const getBibleVerses = (book: string, chapter: number, verseStart: number, verseEnd: number) =>
+  client.get<BibleVerse[]>(`/bible/${encodeURIComponent(book)}/${chapter}/${verseStart}/${verseEnd}`);
+
+// Search history
+export const getSearchHistory = (type?: string) => client.get<SearchHistory[]>('/search-history', { params: { type } });
+export const saveSearchHistory = (query: string, type: string) => client.post('/search-history', { query, type });
+export const deleteSearchHistory = (id: number) => client.delete(`/search-history/${id}`);
+export const clearSearchHistory = () => client.delete('/search-history');

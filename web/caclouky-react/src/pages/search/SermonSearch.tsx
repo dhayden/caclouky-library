@@ -1,15 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Box, Chip, CircularProgress, Divider, Fab, Paper, TextField, Typography
+  Box, Chip, CircularProgress, Divider, Fab, Paper, TextField, Typography,
+  Drawer, List, ListItem, ListItemText, ListItemSecondaryAction, IconButton,
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, Tooltip,
 } from '@mui/material';
-import { Send } from '@mui/icons-material';
-import type { Citation } from '../../types';
+import { Send, History, Delete, Close, MenuBook } from '@mui/icons-material';
+import type { Citation, ScriptureRef, SearchHistory, BibleVerse, UserHighlight } from '../../types';
 import * as api from '../../api';
+import { useAuth } from '../../auth/AuthContext';
 
 interface Message {
   role: 'user' | 'ai';
   text: string;
   citations?: Citation[];
+  scriptures?: ScriptureRef[];
   error?: boolean;
 }
 
@@ -19,24 +23,49 @@ const SUGGESTIONS = [
   "What are his teachings on the church order?",
 ];
 
+const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
+
 export default function SermonSearch() {
+  const { isLoggedIn } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<SearchHistory[]>([]);
+  const [scripture, setScripture] = useState<{ ref: ScriptureRef; verses: BibleVerse[] } | null>(null);
+  const [highlights, setHighlights] = useState<UserHighlight[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  const loadHistory = useCallback(async () => {
+    if (!isLoggedIn()) return;
+    const res = await api.getSearchHistory('sermon');
+    setHistory(res.data);
+  }, [isLoggedIn]);
+
+  const loadHighlights = useCallback(async () => {
+    if (!isLoggedIn()) return;
+    const res = await api.getHighlights('sermon');
+    setHighlights(res.data);
+  }, [isLoggedIn]);
+
+  useEffect(() => { loadHistory(); loadHighlights(); }, [loadHistory, loadHighlights]);
 
   const send = async (question: string) => {
     if (!question.trim() || loading) return;
     setMessages(m => [...m, { role: 'user', text: question }]);
     setInput('');
     setLoading(true);
+    if (isLoggedIn()) api.saveSearchHistory(question, 'sermon').then(loadHistory);
     try {
       const res = await api.chatSearch(question);
-      setMessages(m => [...m, { role: 'ai', text: res.data.answer, citations: res.data.citations }]);
+      setMessages(m => [...m, {
+        role: 'ai',
+        text: res.data.answer,
+        citations: res.data.citations,
+        scriptures: res.data.scriptures,
+      }]);
     } catch {
       setMessages(m => [...m, { role: 'ai', text: 'Sorry, something went wrong. Please try again.', error: true }]);
     } finally {
@@ -44,23 +73,61 @@ export default function SermonSearch() {
     }
   };
 
+  const openScripture = async (ref: ScriptureRef) => {
+    try {
+      const res = await api.getBibleVerses(ref.book, ref.chapter, ref.verseStart, ref.verseEnd);
+      setScripture({ ref, verses: res.data });
+    } catch {
+      setScripture({ ref, verses: [] });
+    }
+  };
+
+  const handleHighlight = async () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.toString().trim() || !isLoggedIn()) return;
+    const text = sel.toString().trim();
+    const color = HIGHLIGHT_COLORS[highlights.length % HIGHLIGHT_COLORS.length];
+    await api.createHighlight('sermon', 'search', text, color);
+    loadHighlights();
+  };
+
+  const applyHighlight = (text: string) => {
+    let result = text;
+    for (const h of highlights) {
+      if (result.includes(h.selectedText)) {
+        result = result.replace(
+          h.selectedText,
+          `<mark style="background:${h.color};border-radius:2px">${h.selectedText}</mark>`
+        );
+      }
+    }
+    return result;
+  };
+
   return (
     <Box display="flex" flexDirection="column" height="calc(100vh - 64px)">
-      <Box p={3} pb={1}>
-        <Typography variant="h5" fontWeight="bold">Sermon Search</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Ask questions about the sermon archive — powered by AI
-        </Typography>
+      {/* Header */}
+      <Box p={3} pb={1} display="flex" justifyContent="space-between" alignItems="flex-start">
+        <Box>
+          <Typography variant="h5" fontWeight="bold">Sermon Search</Typography>
+          <Typography variant="body2" color="text.secondary">Ask questions about the sermon archive — powered by AI</Typography>
+        </Box>
+        {isLoggedIn() && (
+          <Tooltip title="Search history">
+            <IconButton onClick={() => { setHistoryOpen(true); loadHistory(); }}>
+              <History />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
 
-      <Box flex={1} overflow="auto" px={3} pb={2}>
+      {/* Messages */}
+      <Box flex={1} overflow="auto" px={3} pb={2} onMouseUp={handleHighlight}>
         {messages.length === 0 ? (
           <Box py={4}>
             <Typography variant="body2" color="text.secondary" mb={2}>Suggested questions:</Typography>
             <Box display="flex" gap={1} flexWrap="wrap">
-              {SUGGESTIONS.map(s => (
-                <Chip key={s} label={s} onClick={() => send(s)} variant="outlined" clickable />
-              ))}
+              {SUGGESTIONS.map(s => <Chip key={s} label={s} onClick={() => send(s)} variant="outlined" clickable />)}
             </Box>
           </Box>
         ) : (
@@ -74,7 +141,13 @@ export default function SermonSearch() {
                 <Box maxWidth="80%">
                   <Typography variant="caption" color="text.secondary" mb={0.5} display="block">AI Answer</Typography>
                   <Paper variant="outlined" sx={{ px: 2, py: 1.5, borderRadius: 3 }}>
-                    <Typography variant="body1" color={msg.error ? 'error' : 'inherit'}>{msg.text}</Typography>
+                    <Typography
+                      variant="body1"
+                      color={msg.error ? 'error' : 'inherit'}
+                      dangerouslySetInnerHTML={{ __html: applyHighlight(msg.text) }}
+                    />
+
+                    {/* Sermon citations */}
                     {msg.citations && msg.citations.length > 0 && (
                       <>
                         <Divider sx={{ my: 1.5 }} />
@@ -84,6 +157,30 @@ export default function SermonSearch() {
                             {c.documentTitle} — p.{c.pageNumber}
                           </Typography>
                         ))}
+                      </>
+                    )}
+
+                    {/* Scripture references */}
+                    {msg.scriptures && msg.scriptures.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 1.5 }} />
+                        <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                          <MenuBook fontSize="small" color="action" />
+                          <Typography variant="caption" fontWeight="bold" color="text.secondary">Scriptures:</Typography>
+                        </Box>
+                        <Box display="flex" gap={0.5} flexWrap="wrap">
+                          {msg.scriptures.map((s, j) => (
+                            <Chip
+                              key={j}
+                              label={s.reference}
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              clickable
+                              onClick={() => openScripture(s)}
+                            />
+                          ))}
+                        </Box>
                       </>
                     )}
                   </Paper>
@@ -101,6 +198,7 @@ export default function SermonSearch() {
         <div ref={bottomRef} />
       </Box>
 
+      {/* Input */}
       <Box p={2} borderTop={1} borderColor="divider" display="flex" gap={1} alignItems="flex-end">
         <TextField
           fullWidth multiline maxRows={4} placeholder="Ask a question about the sermons…"
@@ -112,6 +210,58 @@ export default function SermonSearch() {
           <Send />
         </Fab>
       </Box>
+
+      {/* History drawer */}
+      <Drawer anchor="right" open={historyOpen} onClose={() => setHistoryOpen(false)}>
+        <Box width={320} p={2}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+            <Typography variant="h6">Search History</Typography>
+            <Box display="flex" gap={1}>
+              {history.length > 0 && (
+                <Button size="small" color="error" onClick={async () => { await api.clearSearchHistory(); loadHistory(); }}>
+                  Clear all
+                </Button>
+              )}
+              <IconButton size="small" onClick={() => setHistoryOpen(false)}><Close /></IconButton>
+            </Box>
+          </Box>
+          <List dense>
+            {history.length === 0 && <Typography variant="body2" color="text.secondary">No history yet.</Typography>}
+            {history.map(h => (
+              <ListItem key={h.id} disableGutters button onClick={() => { send(h.query); setHistoryOpen(false); }}>
+                <ListItemText primary={h.query} secondary={new Date(h.createdAt).toLocaleDateString()} />
+                <ListItemSecondaryAction>
+                  <IconButton size="small" edge="end" onClick={async e => { e.stopPropagation(); await api.deleteSearchHistory(h.id); loadHistory(); }}>
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </ListItemSecondaryAction>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
+
+      {/* Scripture popup */}
+      <Dialog open={!!scripture} onClose={() => setScripture(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>{scripture?.ref.reference}</DialogTitle>
+        <DialogContent dividers>
+          {scripture?.verses.length === 0 ? (
+            <Typography color="text.secondary">Verse not found in database.</Typography>
+          ) : (
+            scripture?.verses.map(v => (
+              <Box key={v.id} mb={1}>
+                <Typography component="span" variant="caption" fontWeight="bold" color="primary.main" mr={1}>
+                  {v.verse}
+                </Typography>
+                <Typography component="span" variant="body1">{v.text}</Typography>
+              </Box>
+            ))
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setScripture(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -6,4 +6,6 @@ public record ChatRequest(string Question);
 
 public record CitationDto(string DocumentTitle, string FileName, int PageNumber);
 
-public record ChatResponse(string Answer, IReadOnlyList<CitationDto> Citations);
+public record ScriptureRefDto(string Reference, string Book, int Chapter, int VerseStart, int VerseEnd);
+
+public record ChatResponse(string Answer, IReadOnlyList<CitationDto> Citations, IReadOnlyList<ScriptureRefDto> Scriptures);

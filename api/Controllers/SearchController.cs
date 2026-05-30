@@ -25,7 +25,8 @@ public class SearchController : ControllerBase
 
         var response = new ChatResponse(
             result.Answer,
-            result.Citations.Select(c => new CitationDto(c.DocumentTitle, c.FileName, c.PageNumber)).ToList()
+            result.Citations.Select(c => new CitationDto(c.DocumentTitle, c.FileName, c.PageNumber)).ToList(),
+            result.Scriptures.Select(s => new ScriptureRefDto(s.Reference, s.Book, s.Chapter, s.VerseStart, s.VerseEnd)).ToList()
         );
 
         return Ok(response);

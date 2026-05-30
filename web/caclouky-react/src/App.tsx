@@ -8,8 +8,10 @@ import Register from './pages/auth/Register';
 import BookList from './pages/catalog/BookList';
 import BookDetail from './pages/catalog/BookDetail';
 import SermonSearch from './pages/search/SermonSearch';
+import BibleSearch from './pages/bible/BibleSearch';
 import MyCheckouts from './pages/member/MyCheckouts';
 import MyReservations from './pages/member/MyReservations';
+import Notes from './pages/member/Notes';
 import AdminShell from './pages/admin/AdminShell';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ManageBooks from './pages/admin/ManageBooks';
@@ -39,8 +41,10 @@ export default function App() {
             <Route path="/catalog" element={<BookList />} />
             <Route path="/catalog/:id" element={<BookDetail />} />
             <Route path="/search" element={<SermonSearch />} />
+            <Route path="/bible" element={<BibleSearch />} />
             <Route path="/my/checkouts" element={<ProtectedRoute><MyCheckouts /></ProtectedRoute>} />
             <Route path="/my/reservations" element={<ProtectedRoute><MyReservations /></ProtectedRoute>} />
+            <Route path="/my/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireMinisterOrAdmin><AdminShell /></ProtectedRoute>}>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />

@@ -13,6 +13,10 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<PdfDocument> PdfDocuments => Set<PdfDocument>();
     public DbSet<PdfChunk> PdfChunks => Set<PdfChunk>();
+    public DbSet<BibleVerse> BibleVerses => Set<BibleVerse>();
+    public DbSet<SearchHistory> SearchHistories => Set<SearchHistory>();
+    public DbSet<UserHighlight> UserHighlights => Set<UserHighlight>();
+    public DbSet<UserNote> UserNotes => Set<UserNote>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -49,6 +53,27 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PdfChunk>(b =>
         {
             b.HasOne(x => x.Document).WithMany(x => x.Chunks).HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<BibleVerse>(b =>
+        {
+            b.HasIndex(x => new { x.Book, x.Chapter, x.Verse }).IsUnique();
+            b.HasIndex(x => new { x.BookNumber, x.Chapter, x.Verse });
+        });
+
+        builder.Entity<SearchHistory>(b =>
+        {
+            b.HasIndex(x => x.UserId);
+        });
+
+        builder.Entity<UserHighlight>(b =>
+        {
+            b.HasIndex(x => new { x.UserId, x.SourceType, x.SourceRef });
+        });
+
+        builder.Entity<UserNote>(b =>
+        {
+            b.HasIndex(x => x.UserId);
         });
     }
 }

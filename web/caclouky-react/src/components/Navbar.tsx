@@ -27,11 +27,13 @@ export default function Navbar() {
 
         <Button color="inherit" component={Link} to="/catalog">Catalog</Button>
         <Button color="inherit" component={Link} to="/search">Sermon Search</Button>
+        <Button color="inherit" component={Link} to="/bible">Bible</Button>
 
         {auth.isLoggedIn() && (
           <>
             <Button color="inherit" component={Link} to="/my/checkouts">My Checkouts</Button>
             <Button color="inherit" component={Link} to="/my/reservations">My Reservations</Button>
+            <Button color="inherit" component={Link} to="/my/notes">My Notes</Button>
           </>
         )}
 

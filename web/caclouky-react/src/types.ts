@@ -86,7 +86,54 @@ export interface Citation {
   pageNumber: number;
 }
 
+export interface ScriptureRef {
+  reference: string;
+  book: string;
+  chapter: number;
+  verseStart: number;
+  verseEnd: number;
+}
+
 export interface ChatResponse {
   answer: string;
   citations: Citation[];
+  scriptures: ScriptureRef[];
+}
+
+export interface BibleVerse {
+  id: number;
+  bookNumber: number;
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
+export interface SearchHistory {
+  id: number;
+  userId: string;
+  query: string;
+  type: string;
+  createdAt: string;
+}
+
+export interface UserHighlight {
+  id: number;
+  userId: string;
+  sourceType: string;
+  sourceRef: string;
+  selectedText: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface UserNote {
+  id: number;
+  userId: string;
+  title: string;
+  content: string;
+  sourceType?: string;
+  sourceRef?: string;
+  createdAt: string;
+  updatedAt: string;
 }

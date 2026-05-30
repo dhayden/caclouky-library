@@ -96,6 +96,8 @@ builder.Services.AddSwaggerGen(c =>
 // Ollama handles embeddings locally (free, no quota). Gemini handles chat answers only.
 builder.Services.AddHttpClient<CacloukyLibrary.Services.OllamaService>();
 builder.Services.AddHttpClient<CacloukyLibrary.Services.GeminiService>();
+builder.Services.AddHttpClient<CacloukyLibrary.Services.BibleService>();
+builder.Services.AddScoped<CacloukyLibrary.Services.BibleService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.PdfIndexService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.SearchService>();
 builder.Services.AddSingleton<CacloukyLibrary.Services.IndexingQueue>();
@@ -173,6 +175,11 @@ using (var scope = app.Services.CreateScope())
         );
         await db.SaveChangesAsync();
     }
+
+    // ── Seed KJV Bible (runs once if table is empty) ──────────────────────────
+    var bible = scope.ServiceProvider.GetRequiredService<CacloukyLibrary.Services.BibleService>();
+    if (!bible.IsSeeded())
+        _ = Task.Run(() => bible.SeedAsync()); // run in background, don't block startup
 }
 
 if (app.Environment.IsDevelopment())
