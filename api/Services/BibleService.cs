@@ -11,12 +11,25 @@ public class BibleService
     private readonly HttpClient _http;
     private readonly ILogger<BibleService> _log;
 
-    // Try multiple mirrors in order — jsdelivr caches GitHub releases reliably
+    // thiagobodruk/bible confirmed working — same chapter/verse array format, uses abbrev field
     private static readonly string[] KjvUrls =
     [
-        "https://cdn.jsdelivr.net/gh/aruljohn/Bible-kjv@master/Bible.json",
-        "https://raw.githubusercontent.com/aruljohn/Bible-kjv/main/Bible.json",
-        "https://raw.githubusercontent.com/aruljohn/Bible-kjv/master/Bible.json",
+        "https://raw.githubusercontent.com/thiagobodruk/bible/master/json/en_kjv.json",
+        "https://cdn.jsdelivr.net/gh/thiagobodruk/bible@master/json/en_kjv.json",
+    ];
+
+    // Canonical book names in Bible order (index 0 = Genesis = book 1)
+    private static readonly string[] KjvBooks =
+    [
+        "Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth",
+        "1 Samuel","2 Samuel","1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra",
+        "Nehemiah","Esther","Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon",
+        "Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel","Amos",
+        "Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi",
+        "Matthew","Mark","Luke","John","Acts","Romans","1 Corinthians","2 Corinthians",
+        "Galatians","Ephesians","Philippians","Colossians","1 Thessalonians","2 Thessalonians",
+        "1 Timothy","2 Timothy","Titus","Philemon","Hebrews","James","1 Peter","2 Peter",
+        "1 John","2 John","3 John","Jude","Revelation",
     ];
 
     // Maps common abbreviations → full KJV book names
@@ -86,7 +99,8 @@ public class BibleService
         foreach (var book in books)
         {
             bookNumber++;
-            var bookName = book.GetProperty("name").GetString() ?? "";
+            // Use canonical name from our ordered array (JSON uses short abbrevs like "gn", "ex")
+            var bookName = bookNumber <= KjvBooks.Length ? KjvBooks[bookNumber - 1] : book.GetProperty("abbrev").GetString() ?? "";
             var chapters = book.GetProperty("chapters").EnumerateArray().ToList();
 
             for (int ci = 0; ci < chapters.Count; ci++)
