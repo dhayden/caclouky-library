@@ -45,7 +45,7 @@ public class GeminiService
             If the answer is not in the source material, say so clearly — do not guess.
             Be thorough but concise. Quote directly from the source when it strengthens the answer.
 
-            After your answer, on a new line add a section titled "SCRIPTURES:" that lists every King James Bible scripture reference mentioned in the source material or your answer, one per line, in this exact format: Book Chapter:Verse (e.g. John 3:16, 1 Corinthians 13:4-7, Psalm 23:1). If none, write "SCRIPTURES: none".
+            After your answer, on a new line add a section titled "SCRIPTURES:" that lists only the King James Bible scripture references that you actually cited or quoted in your answer above — not every reference in the source material. One per line, format: Book Chapter:Verse (e.g. John 3:16, 1 Corinthians 13:4-7). If your answer contains no scripture references, write "SCRIPTURES: none".
 
             SOURCE MATERIAL:
             {context}

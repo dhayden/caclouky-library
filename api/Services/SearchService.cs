@@ -14,7 +14,17 @@ public partial class SearchService
     private readonly LibraryDbContext _db;
     private readonly OllamaService _ollama;
     private readonly GeminiService _gemini;
-    private const int TopK = 5;
+    private const int TopK = 8;
+
+    // Common English stopwords to ignore when extracting keywords
+    private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "the","a","an","and","or","but","in","on","at","to","for","of","with","about","is","are",
+        "was","were","be","been","have","has","had","do","does","did","will","would","could","should",
+        "what","which","who","how","when","where","why","that","this","these","those","there","their",
+        "his","her","its","our","your","my","me","him","us","them","it","he","she","we","they","i",
+        "did","not","no","so","if","by","as","into","than","from","just","also","any","all","more",
+    };
 
     public SearchService(LibraryDbContext db, OllamaService ollama, GeminiService gemini)
     {
@@ -25,16 +35,22 @@ public partial class SearchService
 
     public async Task<SearchResult> AskAsync(string question)
     {
-        // 1. Embed the question locally via Ollama (free, no quota)
+        // 1. Embed the question locally via Ollama
         var questionEmbedding = await _ollama.GetEmbeddingAsync(question);
 
-        // 2. Load all chunks with their embeddings and document info
+        // 2. Extract significant keywords for hybrid boosting
+        var keywords = question
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => Regex.Replace(w, @"[^\w]", "").ToLower())
+            .Where(w => w.Length > 3 && !Stopwords.Contains(w))
+            .ToHashSet();
+
+        // 3. Load all chunks
         var chunks = await _db.PdfChunks
             .Include(c => c.Document)
             .Where(c => c.Document.IsIndexed)
             .Select(c => new
             {
-                c.Id,
                 c.Content,
                 c.Embedding,
                 c.PageNumber,
@@ -46,29 +62,35 @@ public partial class SearchService
         if (chunks.Count == 0)
             return new SearchResult("No sermon documents have been indexed yet. Please ask an admin to upload and index the PDF files.", [], []);
 
-        // 3. Score each chunk by cosine similarity
+        // 4. Hybrid score: cosine similarity + keyword bonus
         var scored = chunks
             .Select(c =>
             {
                 var embedding  = JsonSerializer.Deserialize<float[]>(c.Embedding) ?? [];
-                var similarity = CosineSimilarity(questionEmbedding, embedding);
-                return new { c.Content, c.PageNumber, c.DocumentTitle, c.FileName, Similarity = similarity };
+                var semantic   = CosineSimilarity(questionEmbedding, embedding);
+
+                // Boost chunks that contain keywords from the query (proper nouns, locations, names)
+                var contentLower = c.Content.ToLower();
+                var keywordHits  = keywords.Count(kw => contentLower.Contains(kw));
+                var keywordBoost = keywordHits > 0 ? 0.15f * Math.Min(keywordHits, 3) : 0f;
+
+                return new { c.Content, c.PageNumber, c.DocumentTitle, c.FileName, Score = semantic + keywordBoost };
             })
-            .OrderByDescending(c => c.Similarity)
+            .OrderByDescending(c => c.Score)
             .Take(TopK)
             .ToList();
 
-        // 4. Build context strings for the prompt
+        // 5. Build context
         var contextChunks = scored.Select((c, i) =>
             $"[Source {i + 1}: {c.DocumentTitle}, Page {c.PageNumber}]\n{c.Content}");
 
-        // 5. Get answer from Gemini (includes SCRIPTURES: section)
+        // 6. Get answer from Gemini
         var rawAnswer = await _gemini.GetAnswerAsync(question, contextChunks);
 
-        // 6. Split answer from scripture list
+        // 7. Split answer from scripture list
         var (answer, scriptures) = ParseAnswer(rawAnswer);
 
-        // 7. Deduplicate citations by document+page
+        // 8. Deduplicate citations
         var citations = scored
             .Select(c => new Citation(c.DocumentTitle, c.FileName, c.PageNumber))
             .DistinctBy(c => (c.DocumentTitle, c.PageNumber))
@@ -82,7 +104,7 @@ public partial class SearchService
         var idx = raw.IndexOf("SCRIPTURES:", StringComparison.OrdinalIgnoreCase);
         if (idx < 0) return (raw.Trim(), []);
 
-        var answer      = raw[..idx].Trim();
+        var answer         = raw[..idx].Trim();
         var scriptureBlock = raw[(idx + "SCRIPTURES:".Length)..].Trim();
 
         var refs = new List<ScriptureRef>();
@@ -99,7 +121,6 @@ public partial class SearchService
         return (answer, refs);
     }
 
-    // Matches: "John 3:16", "1 Corinthians 13:4-7", "Psalm 23", "Genesis 1:1"
     [GeneratedRegex(@"^((?:\d\s)?[A-Za-z]+(?:\s[A-Za-z]+)?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?")]
     private static partial Regex ScripturePattern();
 
