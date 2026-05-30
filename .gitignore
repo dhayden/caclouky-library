@@ -12,6 +12,10 @@ web/caclouky-web/node_modules/
 web/caclouky-web/dist/
 web/caclouky-web/.angular/
 
+# Expo / React Native
+mobile/node_modules/
+mobile/.expo/
+
 # Secrets
 .env
 
