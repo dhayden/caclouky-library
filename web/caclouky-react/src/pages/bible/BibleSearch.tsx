@@ -5,7 +5,7 @@ import {
   Paper, Select, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { Search, NoteAdd, History, Delete, Close, Bookmark } from '@mui/icons-material';
-import type { BibleVerse, SearchHistory, UserNote } from '../../types';
+import type { BibleVerse, SearchHistory, UserHighlight } from '../../types';
 import * as api from '../../api';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -30,6 +30,7 @@ export default function BibleSearch() {
   const [noteDialog, setNoteDialog] = useState<{ verseNum: number; verseText: string } | null>(null);
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   const [highlightVerse, setHighlightVerse] = useState<{ verseNum: number; text: string } | null>(null);
+  const [highlights, setHighlights] = useState<UserHighlight[]>([]);
 
   useEffect(() => {
     api.getBibleBooks().then(r => {
@@ -60,8 +61,11 @@ export default function BibleSearch() {
     const notesP = isLoggedIn()
       ? api.getBibleChapterNotes(selectedBook, selectedChapter).then(r => setChapterNotes(r.data as any))
       : Promise.resolve();
+    const hlP = isLoggedIn()
+      ? api.getHighlights('bible').then(r => setHighlights(r.data))
+      : Promise.resolve();
 
-    Promise.all([chapterP, refsP, notesP]).finally(() => setLoading(false));
+    Promise.all([chapterP, refsP, notesP, hlP]).finally(() => setLoading(false));
   }, [selectedBook, selectedChapter, searchResults, isLoggedIn]);
 
   const doSearch = async (q: string) => {
@@ -94,7 +98,16 @@ export default function BibleSearch() {
     if (!highlightVerse) return;
     const ref = `${selectedBook}:${selectedChapter}:${highlightVerse.verseNum}`;
     await api.createHighlight('bible', ref, highlightVerse.text, color);
+    setHighlights(hs => [...hs.filter(h => h.sourceRef !== ref), {
+      id: Date.now(), userId: '', sourceType: 'bible', sourceRef: ref,
+      selectedText: highlightVerse.text, color, createdAt: new Date().toISOString()
+    }]);
     setHighlightVerse(null);
+  };
+
+  const verseHighlight = (verseNum: number): string | undefined => {
+    const ref = `${selectedBook}:${selectedChapter}:${verseNum}`;
+    return highlights.find(h => h.sourceRef === ref)?.color;
   };
 
   const displayVerses = searchResults ?? verses;
@@ -171,6 +184,7 @@ export default function BibleSearch() {
             const refs  = crossRefs[v.verse] ?? [];
             const notes = chapterNotes[v.verse] ?? [];
             const hasRightContent = refs.length > 0 || notes.length > 0;
+            const hlColor = verseHighlight(v.verse);
 
             return (
               <Box
@@ -182,7 +196,9 @@ export default function BibleSearch() {
                 sx={{
                   borderBottom: '1px solid',
                   borderColor: 'divider',
-                  '&:hover': { bgcolor: 'action.hover' },
+                  bgcolor: hlColor ? hlColor + '55' : 'transparent',
+                  borderLeft: hlColor ? `4px solid ${hlColor}` : '4px solid transparent',
+                  '&:hover': { bgcolor: hlColor ? hlColor + '77' : 'action.hover' },
                 }}
               >
                 {/* Left: KJV verse */}

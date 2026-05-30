@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import { AccountCircle, LocalLibrary } from '@mui/icons-material';
 import { useAuth } from '../auth/AuthContext';
+import NotesDrawer from './NotesDrawer';
 
 export default function Navbar() {
   const auth = useAuth();
@@ -33,7 +34,6 @@ export default function Navbar() {
           <>
             <Button color="inherit" component={Link} to="/my/checkouts">My Checkouts</Button>
             <Button color="inherit" component={Link} to="/my/reservations">My Reservations</Button>
-            <Button color="inherit" component={Link} to="/my/notes">My Notes</Button>
           </>
         )}
 
@@ -45,6 +45,7 @@ export default function Navbar() {
 
         {auth.isLoggedIn() ? (
           <>
+            <NotesDrawer />
             <IconButton color="inherit" onClick={e => setAnchorEl(e.currentTarget)}>
               <AccountCircle />
             </IconButton>

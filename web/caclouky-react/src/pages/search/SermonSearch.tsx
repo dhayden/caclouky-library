@@ -40,7 +40,8 @@ export default function SermonSearch() {
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [scripture, setScripture] = useState<{ ref: ScriptureRef; verses: BibleVerse[] } | null>(null);
   const [highlights, setHighlights] = useState<UserHighlight[]>([]);
-  const [highlightPicker, setHighlightPicker] = useState<{ msgIndex: number } | null>(null);
+  const [highlightPicker, setHighlightPicker] = useState<{ msgIndex: number; text: string } | null>(null);
+  const [msgHighlights, setMsgHighlights] = useState<Record<number, string>>({}); // msgIndex → color
   const [noteDialog, setNoteDialog] = useState<{ text: string } | null>(null);
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   const [selectedText, setSelectedText] = useState('');
@@ -96,9 +97,10 @@ export default function SermonSearch() {
   };
 
   const applyHighlight = async (color: string) => {
-    const text = selectedText || (highlightPicker ? messages[highlightPicker.msgIndex]?.text : '');
-    if (!text) return;
-    await api.createHighlight('sermon', 'search', text.slice(0, 500), color);
+    if (!highlightPicker) return;
+    const text = selectedText || highlightPicker.text.slice(0, 500);
+    await api.createHighlight('sermon', 'search', text, color);
+    setMsgHighlights(h => ({ ...h, [highlightPicker.msgIndex]: color }));
     loadHighlights();
     setHighlightPicker(null);
     setSelectedText('');
@@ -161,20 +163,25 @@ export default function SermonSearch() {
               ) : (
                 <Box maxWidth="82%">
                   <Typography variant="caption" color="text.secondary" mb={0.5} display="block">AI Answer</Typography>
-                  <Paper variant="outlined" sx={{ px: 2, py: 1.5, borderRadius: 3 }}>
+                  <Paper variant="outlined" sx={{
+                    px: 2, py: 1.5, borderRadius: 3,
+                    borderLeft: msgHighlights[i] ? `6px solid ${msgHighlights[i]}` : undefined,
+                    bgcolor: msgHighlights[i] ? msgHighlights[i] + '18' : undefined,
+                  }}>
                     <Typography
                       variant="body1"
                       color={msg.error ? 'error' : 'inherit'}
-                      dangerouslySetInnerHTML={{ __html: applyHighlightToText(msg.text) }}
                       sx={{ userSelect: 'text' }}
-                    />
+                    >
+                      {msg.text}
+                    </Typography>
 
                     {/* Action bar — highlight + note buttons */}
                     {isLoggedIn() && !msg.error && (
                       <Stack direction="row" spacing={1} mt={1.5}>
                         <Button
                           size="small" variant="outlined" startIcon={<Highlight />}
-                          onClick={() => setHighlightPicker({ msgIndex: i })}
+                          onClick={() => setHighlightPicker({ msgIndex: i, text: msg.text })}
                           sx={{ fontSize: 11 }}
                         >
                           Highlight

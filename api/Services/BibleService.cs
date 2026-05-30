@@ -11,7 +11,13 @@ public class BibleService
     private readonly HttpClient _http;
     private readonly ILogger<BibleService> _log;
 
-    private const string KjvUrl = "https://raw.githubusercontent.com/aruljohn/Bible-kjv/master/Bible.json";
+    // Try multiple mirrors in order — jsdelivr caches GitHub releases reliably
+    private static readonly string[] KjvUrls =
+    [
+        "https://cdn.jsdelivr.net/gh/aruljohn/Bible-kjv@master/Bible.json",
+        "https://raw.githubusercontent.com/aruljohn/Bible-kjv/main/Bible.json",
+        "https://raw.githubusercontent.com/aruljohn/Bible-kjv/master/Bible.json",
+    ];
 
     // Maps common abbreviations → full KJV book names
     private static readonly Dictionary<string, string> Abbrevs = new(StringComparer.OrdinalIgnoreCase)
@@ -56,8 +62,21 @@ public class BibleService
     {
         if (IsSeeded()) return;
 
-        _log.LogInformation("Downloading KJV Bible from {Url}…", KjvUrl);
-        var json = await _http.GetStringAsync(KjvUrl);
+        string? json = null;
+        foreach (var url in KjvUrls)
+        {
+            try
+            {
+                _log.LogInformation("Downloading KJV Bible from {Url}…", url);
+                json = await _http.GetStringAsync(url);
+                break;
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning("Failed to download from {Url}: {Msg}", url, ex.Message);
+            }
+        }
+        if (json == null) { _log.LogError("All KJV download URLs failed."); return; }
 
         using var doc  = JsonDocument.Parse(json);
         var books      = doc.RootElement.EnumerateArray().ToList();
