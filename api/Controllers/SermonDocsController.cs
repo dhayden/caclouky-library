@@ -108,14 +108,21 @@ public class SermonDocsController : ControllerBase
         return Ok(new { message = $"Queued {newFiles.Count} PDF(s) for background indexing.", queued = newFiles.Count });
     }
 
-    // GET /api/sermon-docs/file/{fileName}
+    // GET /api/sermon-docs/page/{fileName}/{pageNumber}
     [AllowAnonymous]
-    [HttpGet("file/{fileName}")]
-    public IActionResult GetFile(string fileName)
+    [HttpGet("page/{fileName}/{pageNumber:int}")]
+    public async Task<IActionResult> GetPage(string fileName, int pageNumber)
     {
-        var filePath = Path.Combine(_indexer.StoragePath, fileName);
-        if (!System.IO.File.Exists(filePath)) return NotFound();
-        return PhysicalFile(filePath, "application/pdf", enableRangeProcessing: true);
+        var doc = await _db.PdfDocuments.FirstOrDefaultAsync(d => d.FileName == fileName);
+        if (doc == null) return NotFound();
+
+        var chunks = await _db.PdfChunks
+            .Where(c => c.DocumentId == doc.Id && c.PageNumber == pageNumber)
+            .OrderBy(c => c.ChunkIndex)
+            .Select(c => c.Content)
+            .ToListAsync();
+
+        return Ok(new { doc.Title, doc.FileName, pageNumber, doc.PageCount, text = string.Join("\n\n", chunks) });
     }
 
     // DELETE /api/sermon-docs/5
