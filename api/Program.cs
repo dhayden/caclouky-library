@@ -179,7 +179,15 @@ using (var scope = app.Services.CreateScope())
     // ── Seed KJV Bible (runs once if table is empty) ──────────────────────────
     var bible = scope.ServiceProvider.GetRequiredService<CacloukyLibrary.Services.BibleService>();
     if (!bible.IsSeeded())
-        _ = Task.Run(() => bible.SeedAsync()); // run in background, don't block startup
+    {
+        // Create a new scope so the DbContext isn't disposed when the seed runs
+        _ = Task.Run(async () =>
+        {
+            using var seedScope = app.Services.CreateScope();
+            var svc = seedScope.ServiceProvider.GetRequiredService<CacloukyLibrary.Services.BibleService>();
+            await svc.SeedAsync();
+        });
+    }
 }
 
 if (app.Environment.IsDevelopment())
