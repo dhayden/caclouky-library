@@ -1,18 +1,31 @@
 import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import SermonSearchScreen from '../screens/SermonSearchScreen';
+import PdfViewerScreen from '../screens/PdfViewerScreen';
 import AccountScreen from '../screens/AccountScreen';
+import type { SermonStackParamList } from './types';
 
+const SermonStack = createNativeStackNavigator<SermonStackParamList>();
 const Tab = createBottomTabNavigator();
+
+function SermonNavigator() {
+  return (
+    <SermonStack.Navigator>
+      <SermonStack.Screen name="SermonSearch" component={SermonSearchScreen} options={{ title: 'Sermon Search' }} />
+      <SermonStack.Screen name="PdfViewer" component={PdfViewerScreen} options={({ route }) => ({ title: route.params.title })} />
+    </SermonStack.Navigator>
+  );
+}
 
 function AuthenticatedTabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: true }}>
-      <Tab.Screen name="Sermons" component={SermonSearchScreen} options={{ tabBarIcon: () => <Text>🎙</Text>, headerTitle: 'Sermon Search' }} />
-      <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarIcon: () => <Text>👤</Text> }} />
+    <Tab.Navigator screenOptions={{ headerShown: false }}>
+      <Tab.Screen name="Sermons" component={SermonNavigator} options={{ tabBarIcon: () => <Text>🎙</Text> }} />
+      <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarIcon: () => <Text>👤</Text>, headerShown: true }} />
     </Tab.Navigator>
   );
 }

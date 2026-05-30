@@ -108,6 +108,16 @@ public class SermonDocsController : ControllerBase
         return Ok(new { message = $"Queued {newFiles.Count} PDF(s) for background indexing.", queued = newFiles.Count });
     }
 
+    // GET /api/sermon-docs/file/{fileName}
+    [AllowAnonymous]
+    [HttpGet("file/{fileName}")]
+    public IActionResult GetFile(string fileName)
+    {
+        var filePath = Path.Combine(_indexer.StoragePath, fileName);
+        if (!System.IO.File.Exists(filePath)) return NotFound();
+        return PhysicalFile(filePath, "application/pdf", enableRangeProcessing: true);
+    }
+
     // DELETE /api/sermon-docs/5
     [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]

@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { SermonStackParamList } from '../navigation/types';
 import type { Citation } from '../types';
 import * as api from '../api';
+
+type Props = NativeStackScreenProps<SermonStackParamList, 'SermonSearch'>;
 
 interface Message {
   role: 'user' | 'ai';
@@ -16,7 +20,7 @@ const SUGGESTIONS = [
   "What are his teachings on the church order?",
 ];
 
-export default function SermonSearchScreen() {
+export default function SermonSearchScreen({ navigation }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,6 +40,14 @@ export default function SermonSearchScreen() {
       setLoading(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
+  };
+
+  const openCitation = (c: Citation) => {
+    navigation.navigate('PdfViewer', {
+      fileName: c.fileName,
+      page: c.pageNumber,
+      title: `${c.documentTitle} — p.${c.pageNumber}`,
+    });
   };
 
   return (
@@ -61,7 +73,9 @@ export default function SermonSearchScreen() {
               <View style={styles.citations}>
                 <Text style={styles.citationsLabel}>Sources:</Text>
                 {msg.citations.map((c, j) => (
-                  <Text key={j} style={styles.citation}>{c.documentTitle} — p.{c.pageNumber}</Text>
+                  <TouchableOpacity key={j} onPress={() => openCitation(c)}>
+                    <Text style={styles.citationLink}>{c.documentTitle} — p.{c.pageNumber}</Text>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -113,8 +127,8 @@ const styles = StyleSheet.create({
   bubbleTextUser: { color: '#fff' },
   bubbleError: { color: '#d32f2f' },
   citations: { marginTop: 8, borderTopWidth: 1, borderTopColor: '#e0e0e0', paddingTop: 6 },
-  citationsLabel: { fontSize: 11, fontWeight: '700', color: '#888', marginBottom: 2 },
-  citation: { fontSize: 11, color: '#888' },
+  citationsLabel: { fontSize: 11, fontWeight: '700', color: '#888', marginBottom: 4 },
+  citationLink: { fontSize: 12, color: '#1976d2', textDecorationLine: 'underline', marginBottom: 3 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   loadingText: { fontSize: 13, color: '#888' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff' },

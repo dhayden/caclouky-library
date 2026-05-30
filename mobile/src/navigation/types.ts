@@ -3,6 +3,11 @@ export type CatalogStackParamList = {
   BookDetail: { id: number };
 };
 
+export type SermonStackParamList = {
+  SermonSearch: undefined;
+  PdfViewer: { fileName: string; page: number; title: string };
+};
+
 export type AdminStackParamList = {
   AdminDashboard: undefined;
   AdminCheckouts: undefined;
