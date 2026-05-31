@@ -11,6 +11,7 @@ const EMPTY = { title: '', content: '' };
 export default function NotesScreen() {
   const [notes, setNotes] = useState<UserNote[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(EMPTY);
@@ -18,7 +19,11 @@ export default function NotesScreen() {
 
   const load = () => {
     setLoading(true);
-    api.getNotes().then(r => setNotes(r.data)).finally(() => setLoading(false));
+    setLoadError(false);
+    api.getNotes()
+      .then(r => setNotes(r.data))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
@@ -58,6 +63,12 @@ export default function NotesScreen() {
 
   return (
     <View style={styles.container}>
+      {loadError && (
+        <TouchableOpacity style={styles.errorBanner} onPress={load}>
+          <Text style={styles.errorBannerText}>Could not reach server — tap to retry</Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity style={styles.addBtn} onPress={() => openNew()}>
         <Text style={styles.addBtnText}>+ New Note</Text>
       </TouchableOpacity>
@@ -66,7 +77,7 @@ export default function NotesScreen() {
         data={notes}
         keyExtractor={n => String(n.id)}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<Text style={styles.empty}>No notes yet. Tap "+ New Note" to create one.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{loadError ? 'Notes unavailable — check your connection.' : 'No notes yet. Tap "+ New Note" to create one.'}</Text>}
         renderItem={({ item: n }) => (
           <TouchableOpacity style={styles.card} onPress={() => openEdit(n)}>
             <View style={styles.cardHeader}>
@@ -123,6 +134,8 @@ export default function NotesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
+  errorBanner: { backgroundColor: '#d32f2f', padding: 10, alignItems: 'center' },
+  errorBannerText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   center: { flex: 1 },
   addBtn: { margin: 12, backgroundColor: '#1976d2', borderRadius: 8, padding: 13, alignItems: 'center' },
   addBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
