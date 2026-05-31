@@ -1,6 +1,18 @@
-const DEV_API_URL = __DEV__ && typeof window !== 'undefined'
-  ? 'http://localhost:5000'       // browser (npm run web)
-  : 'http://10.90.20.57:5000';   // physical device via Expo Go
+import Constants from 'expo-constants';
+
+function getDevApiUrl(): string {
+  // On web, the API is on the same machine as the browser
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    return 'http://localhost:5000';
+  }
+  // On a physical device or simulator, derive the host from Metro's bundler URI
+  // so the IP never needs to be hardcoded
+  const hostUri: string | undefined =
+    Constants.expoConfig?.hostUri ?? (Constants as any).manifest?.debuggerHost;
+  const host = hostUri?.split(':')[0];
+  return host ? `http://${host}:5000` : 'http://localhost:5000';
+}
+
 const PROD_API_URL = '';  // set when deployed
 
-export const API_BASE_URL = __DEV__ ? DEV_API_URL : PROD_API_URL;
+export const API_BASE_URL = __DEV__ ? getDevApiUrl() : PROD_API_URL;
