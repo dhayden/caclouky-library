@@ -77,63 +77,86 @@ const CHAPTER_COUNTS: Record<string, number> = {
 
 // ── Verse Chooser component ───────────────────────────────────────────────────
 
+type ChooserMode = 'book' | 'chapter' | 'verse';
+
 interface VerseChooserProps {
   visible: boolean;
   selectedBook: string;
   chapter: number;
-  verseCount: number;
-  onNavigate: (book: string, chapter: number, verse?: number) => void;
+  onNavigate: (book: string, chapter: number, verse: number) => void;
   onClose: () => void;
 }
 
-function VerseChooser({ visible, selectedBook, chapter, verseCount, onNavigate, onClose }: VerseChooserProps) {
+function NumberGrid({ count, selected, onSelect }: { count: number; selected: number; onSelect: (n: number) => void }) {
+  const nums = Array.from({ length: count }, (_, i) => i + 1);
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={chooserStyles.numGrid}>
+      {nums.map(n => (
+        <TouchableOpacity key={n} style={chooserStyles.numCell} onPress={() => onSelect(n)}>
+          <Text style={[chooserStyles.numText, n === selected && chooserStyles.numTextSelected]}>{n}</Text>
+          {n === selected && <View style={chooserStyles.numUnderline} />}
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
+function VerseChooser({ visible, selectedBook, chapter, onNavigate, onClose }: VerseChooserProps) {
+  const [mode, setMode] = useState<ChooserMode>('book');
   const [pickerBook, setPickerBook] = useState(selectedBook);
   const [pickerChapter, setPickerChapter] = useState(chapter);
-  const [pickerVerse, setPickerVerse] = useState(1);
-  const [goToText, setGoToText] = useState('');
+  const [verseCount, setVerseCount] = useState(1);
+  const [loadingVerses, setLoadingVerses] = useState(false);
 
   useEffect(() => {
     if (visible) {
+      setMode('book');
       setPickerBook(selectedBook);
       setPickerChapter(chapter);
-      setPickerVerse(1);
-      setGoToText('');
     }
-  }, [visible, selectedBook, chapter]);
-
-  const maxChapter = CHAPTER_COUNTS[pickerBook] ?? 1;
-  const currentVerseCount = pickerBook === selectedBook && pickerChapter === chapter ? verseCount : 999;
+  }, [visible]);
 
   const selectBook = (book: string) => {
     setPickerBook(book);
     setPickerChapter(1);
-    setPickerVerse(1);
+    setMode('chapter');
   };
 
-  const go = () => {
-    onNavigate(pickerBook, pickerChapter, pickerVerse);
+  const selectChapter = async (ch: number) => {
+    setPickerChapter(ch);
+    setLoadingVerses(true);
+    setMode('verse');
+    try {
+      const res = await api.getBibleChapter(pickerBook, ch);
+      setVerseCount(res.data.length || 1);
+    } catch {
+      setVerseCount(30);
+    } finally {
+      setLoadingVerses(false);
+    }
+  };
+
+  const selectVerse = (v: number) => {
+    onNavigate(pickerBook, pickerChapter, v);
     onClose();
   };
 
-  const handleGoTo = () => {
-    const text = goToText.trim();
-    if (!text) return;
-    // Parse "3:16" or "John 3:16" or "John 3"
-    const match = text.match(/^(?:(.+?)\s+)?(\d+)(?::(\d+))?$/);
-    if (!match) return;
-    const book = match[1] ? match[1] : pickerBook;
-    const ch = parseInt(match[2]);
-    const v = match[3] ? parseInt(match[3]) : 1;
-    const found = [...OT_BOOKS, ...NT_BOOKS].find(b =>
-      b.toLowerCase().startsWith(book.toLowerCase()) ||
-      (ABBREV[b] ?? '').toLowerCase() === book.toLowerCase()
-    );
-    onNavigate(found ?? pickerBook, ch, v);
-    onClose();
+  const goBack = () => {
+    if (mode === 'verse') setMode('chapter');
+    else if (mode === 'chapter') setMode('book');
+    else onClose();
   };
+
+  const maxChapters = CHAPTER_COUNTS[pickerBook] ?? 1;
+
+  const headerLabel = mode === 'book'
+    ? 'Select Book'
+    : mode === 'chapter'
+    ? pickerBook
+    : `${pickerBook}  ${pickerChapter}`;
 
   const renderBookGrid = (bookList: string[], color: string) => (
-    <View style={chooserStyles.grid}>
+    <View style={chooserStyles.bookGrid}>
       {bookList.map(book => {
         const isSelected = book === pickerBook;
         return (
@@ -141,7 +164,7 @@ function VerseChooser({ visible, selectedBook, chapter, verseCount, onNavigate, 
             <Text style={[chooserStyles.bookAbbrev, { color: isSelected ? '#4caf50' : color }]}>
               {ABBREV[book] ?? book.slice(0, 3).toUpperCase()}
             </Text>
-            {isSelected && <View style={chooserStyles.selectedUnderline} />}
+            {isSelected && <View style={chooserStyles.numUnderline} />}
           </TouchableOpacity>
         );
       })}
@@ -151,68 +174,50 @@ function VerseChooser({ visible, selectedBook, chapter, verseCount, onNavigate, 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={chooserStyles.container}>
+
         {/* Header */}
         <View style={chooserStyles.header}>
-          <Text style={chooserStyles.headerTitle}>Verse Chooser</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={chooserStyles.headerClose}>✕</Text>
+          <TouchableOpacity style={chooserStyles.backBtn} onPress={goBack}>
+            <Text style={chooserStyles.backBtnText}>{mode === 'book' ? '✕' : '‹'}</Text>
           </TouchableOpacity>
+          <Text style={chooserStyles.headerTitle}>{headerLabel}</Text>
+          {mode !== 'book' && (
+            <TouchableOpacity onPress={onClose}>
+              <Text style={chooserStyles.headerClose}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        <Text style={chooserStyles.currentBook}>{pickerBook}</Text>
-
-        {/* Chapter / Verse pickers */}
-        <View style={chooserStyles.pickerRow}>
-          <View style={chooserStyles.pickerBox}>
-            <TouchableOpacity onPress={() => setPickerChapter(ch => Math.max(1, ch - 1))}>
-              <Text style={chooserStyles.pickerArrow}>‹</Text>
-            </TouchableOpacity>
-            <Text style={chooserStyles.pickerLabel}>CHAPTER: <Text style={chooserStyles.pickerValue}>{pickerChapter}</Text></Text>
-            <TouchableOpacity onPress={() => setPickerChapter(ch => Math.min(maxChapter, ch + 1))}>
-              <Text style={chooserStyles.pickerArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={chooserStyles.pickerBox}>
-            <TouchableOpacity onPress={() => setPickerVerse(v => Math.max(1, v - 1))}>
-              <Text style={chooserStyles.pickerArrow}>‹</Text>
-            </TouchableOpacity>
-            <Text style={chooserStyles.pickerLabel}>VERSE: <Text style={chooserStyles.pickerValue}>{pickerVerse}</Text></Text>
-            <TouchableOpacity onPress={() => setPickerVerse(v => v + 1)}>
-              <Text style={chooserStyles.pickerArrow}>›</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Sub-label */}
+        <View style={chooserStyles.subHeader}>
+          <Text style={chooserStyles.subLabel}>
+            {mode === 'book' ? 'Choose a book' : mode === 'chapter' ? 'Choose a chapter' : 'Choose a verse'}
+          </Text>
         </View>
 
-        {/* Go to verse */}
-        <View style={chooserStyles.goToRow}>
-          <TextInput
-            style={chooserStyles.goToInput}
-            placeholder="Go To Verse  e.g. Acts 2:38"
-            placeholderTextColor="#666"
-            value={goToText}
-            onChangeText={setGoToText}
-            onSubmitEditing={handleGoTo}
-            returnKeyType="go"
-          />
-          <TouchableOpacity style={chooserStyles.goToBtn} onPress={handleGoTo}>
-            <Text style={chooserStyles.goToBtnText}>→</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Book mode */}
+        {mode === 'book' && (
+          <ScrollView style={chooserStyles.scroll} showsVerticalScrollIndicator={false}>
+            <Text style={chooserStyles.testament}>Old Testament</Text>
+            {renderBookGrid(OT_BOOKS, '#ff9800')}
+            <View style={chooserStyles.divider} />
+            <Text style={chooserStyles.testament}>New Testament</Text>
+            {renderBookGrid(NT_BOOKS, '#9c27b0')}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )}
 
-        {/* Go button */}
-        <TouchableOpacity style={chooserStyles.navigateBtn} onPress={go}>
-          <Text style={chooserStyles.navigateBtnText}>Go to {ABBREV[pickerBook] ?? pickerBook} {pickerChapter}:{pickerVerse}</Text>
-        </TouchableOpacity>
+        {/* Chapter mode */}
+        {mode === 'chapter' && (
+          <NumberGrid count={maxChapters} selected={pickerChapter} onSelect={selectChapter} />
+        )}
 
-        {/* Book grid */}
-        <ScrollView style={chooserStyles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={chooserStyles.testament}>Old Testament</Text>
-          {renderBookGrid(OT_BOOKS, '#ff9800')}
-          <View style={chooserStyles.divider} />
-          <Text style={chooserStyles.testament}>New Testament</Text>
-          {renderBookGrid(NT_BOOKS, '#9c27b0')}
-          <View style={{ height: 40 }} />
-        </ScrollView>
+        {/* Verse mode */}
+        {mode === 'verse' && (
+          loadingVerses
+            ? <ActivityIndicator style={{ marginTop: 60 }} size="large" color="#4caf50" />
+            : <NumberGrid count={verseCount} selected={1} onSelect={selectVerse} />
+        )}
       </View>
     </Modal>
   );
@@ -220,28 +225,25 @@ function VerseChooser({ visible, selectedBook, chapter, verseCount, onNavigate, 
 
 const chooserStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#12122a' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingTop: 20 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  headerClose: { fontSize: 22, color: '#888' },
-  currentBook: { fontSize: 14, color: '#aaa', paddingHorizontal: 16, marginBottom: 12 },
-  pickerRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, marginBottom: 12 },
-  pickerBox: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1e1e3a', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12 },
-  pickerArrow: { color: '#4caf50', fontSize: 22, fontWeight: 'bold' },
-  pickerLabel: { fontSize: 12, fontWeight: '700', color: '#aaa', letterSpacing: 0.5 },
-  pickerValue: { color: '#fff' },
-  goToRow: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 10, gap: 8 },
-  goToInput: { flex: 1, backgroundColor: '#1e1e3a', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, color: '#fff', fontSize: 14 },
-  goToBtn: { backgroundColor: '#4caf50', borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center' },
-  goToBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  navigateBtn: { marginHorizontal: 16, marginBottom: 16, backgroundColor: '#1e1e3a', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#4caf50' },
-  navigateBtnText: { color: '#4caf50', fontWeight: '700', fontSize: 14 },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a3a1a', paddingHorizontal: 16, paddingVertical: 14, paddingTop: 20, gap: 10 },
+  backBtn: { width: 32 },
+  backBtnText: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#fff' },
+  headerClose: { fontSize: 20, color: '#aaa' },
+  subHeader: { backgroundColor: '#12122a', paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#2a2a4a' },
+  subLabel: { fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: 1 },
   scroll: { flex: 1, paddingHorizontal: 16 },
-  testament: { fontSize: 13, fontWeight: '700', color: '#aaa', marginBottom: 12, marginTop: 4 },
-  divider: { height: 1, backgroundColor: '#2a2a4a', marginVertical: 16 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
-  bookCell: { width: '13%', alignItems: 'center', paddingVertical: 10 },
+  testament: { fontSize: 13, fontWeight: '700', color: '#aaa', marginBottom: 12, marginTop: 16 },
+  divider: { height: 1, backgroundColor: '#2a2a4a', marginVertical: 8 },
+  bookGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  bookCell: { width: '14.28%', alignItems: 'center', paddingVertical: 14 },
   bookAbbrev: { fontSize: 13, fontWeight: '700', letterSpacing: 0.3 },
-  selectedUnderline: { height: 2, width: '100%', backgroundColor: '#4caf50', marginTop: 2 },
+  // Number grid
+  numGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 40 },
+  numCell: { width: '14.28%', alignItems: 'center', paddingVertical: 18 },
+  numText: { fontSize: 18, color: '#fff', fontWeight: '400' },
+  numTextSelected: { fontWeight: 'bold', color: '#fff' },
+  numUnderline: { height: 3, width: 28, backgroundColor: '#4caf50', marginTop: 4, borderRadius: 2 },
 });
 
 // ── Main BibleScreen ──────────────────────────────────────────────────────────
@@ -509,7 +511,6 @@ export default function BibleScreen() {
         visible={chooserOpen}
         selectedBook={selectedBook}
         chapter={chapter}
-        verseCount={verses.length}
         onNavigate={handleNavigate}
         onClose={() => setChooserOpen(false)}
       />
