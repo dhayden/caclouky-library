@@ -105,12 +105,21 @@ export interface UserHighlight {
   createdAt: string;
 }
 
+export interface NoteFolder {
+  id: number;
+  name: string;
+  color?: string;
+  createdAt: string;
+  noteCount: number;
+}
+
 export interface UserNote {
   id: number;
   title: string;
   content: string;
   sourceType?: string;
   sourceRef?: string;
+  folderId?: number;
   createdAt: string;
   updatedAt: string;
 }

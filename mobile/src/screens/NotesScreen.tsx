@@ -4,128 +4,332 @@ import {
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import * as api from '../api';
-import type { UserNote } from '../types';
+import type { NoteFolder, UserNote } from '../types';
+import { useDisplay } from '../context/DisplayContext';
 
-const EMPTY = { title: '', content: '' };
+const FOLDER_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c62828', '#00796b', '#5d4037', '#455a64'];
+
+const EMPTY_NOTE = { title: '', content: '', folderId: undefined as number | undefined };
+const EMPTY_FOLDER = { name: '', color: FOLDER_COLORS[0] };
 
 export default function NotesScreen() {
+  const { theme } = useDisplay();
+  const c = theme.colors;
+  const f = theme.font;
+
+  const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [notes, setNotes] = useState<UserNote[]>([]);
+  const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState(EMPTY);
-  const [saving, setSaving] = useState(false);
 
-  const load = () => {
+  const [noteModal, setNoteModal] = useState(false);
+  const [editNoteId, setEditNoteId] = useState<number | null>(null);
+  const [noteForm, setNoteForm] = useState(EMPTY_NOTE);
+  const [savingNote, setSavingNote] = useState(false);
+
+  const [folderModal, setFolderModal] = useState(false);
+  const [editFolderId, setEditFolderId] = useState<number | null>(null);
+  const [folderForm, setFolderForm] = useState(EMPTY_FOLDER);
+  const [savingFolder, setSavingFolder] = useState(false);
+
+  const loadFolders = () =>
+    api.getNoteFolders().then(r => setFolders(r.data)).catch(() => {});
+
+  const loadNotes = (folderId?: number) => {
     setLoading(true);
     setLoadError(false);
-    api.getNotes()
+    api.getNotes(folderId)
       .then(r => setNotes(r.data))
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
 
-  const openNew = (prefill = '') => {
-    setForm({ title: '', content: prefill });
-    setEditId(null);
-    setModalOpen(true);
+  useEffect(() => {
+    loadFolders();
+    loadNotes();
+  }, []);
+
+  const selectFolder = (id: number | null) => {
+    setActiveFolderId(id);
+    loadNotes(id ?? undefined);
   };
 
-  const openEdit = (n: UserNote) => {
-    setForm({ title: n.title, content: n.content });
-    setEditId(n.id);
-    setModalOpen(true);
+  // --- Note actions ---
+  const openNewNote = (prefillContent = '') => {
+    setNoteForm({ title: '', content: prefillContent, folderId: activeFolderId ?? undefined });
+    setEditNoteId(null);
+    setNoteModal(true);
   };
 
-  const save = async () => {
-    if (!form.title.trim() || !form.content.trim()) return;
-    setSaving(true);
+  const openEditNote = (n: UserNote) => {
+    setNoteForm({ title: n.title, content: n.content, folderId: n.folderId });
+    setEditNoteId(n.id);
+    setNoteModal(true);
+  };
+
+  const saveNote = async () => {
+    if (!noteForm.title.trim() || !noteForm.content.trim()) return;
+    setSavingNote(true);
     try {
-      if (editId) await api.updateNote(editId, form);
-      else await api.createNote({ ...form, sourceType: 'sermon' });
-      setModalOpen(false);
-      load();
+      if (editNoteId) await api.updateNote(editNoteId, noteForm);
+      else await api.createNote({ ...noteForm, sourceType: 'general' });
+      setNoteModal(false);
+      loadNotes(activeFolderId ?? undefined);
+      loadFolders();
+    } catch {
+      Alert.alert('Error', 'Could not save note. Check your connection.');
     } finally {
-      setSaving(false);
+      setSavingNote(false);
     }
   };
 
-  const remove = (id: number) => {
+  const deleteNote = (id: number) => {
     Alert.alert('Delete Note', 'Delete this note?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await api.deleteNote(id); load(); } },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await api.deleteNote(id);
+          loadNotes(activeFolderId ?? undefined);
+          loadFolders();
+        },
+      },
     ]);
   };
 
-  if (loading) return <ActivityIndicator style={styles.center} size="large" color="#1976d2" />;
+  // --- Folder actions ---
+  const openNewFolder = () => {
+    setFolderForm(EMPTY_FOLDER);
+    setEditFolderId(null);
+    setFolderModal(true);
+  };
+
+  const openEditFolder = (folder: NoteFolder) => {
+    setFolderForm({ name: folder.name, color: folder.color ?? FOLDER_COLORS[0] });
+    setEditFolderId(folder.id);
+    setFolderModal(true);
+  };
+
+  const saveFolder = async () => {
+    if (!folderForm.name.trim()) return;
+    setSavingFolder(true);
+    try {
+      if (editFolderId) await api.updateNoteFolder(editFolderId, folderForm.name, folderForm.color);
+      else await api.createNoteFolder(folderForm.name, folderForm.color);
+      setFolderModal(false);
+      loadFolders();
+    } catch {
+      Alert.alert('Error', 'Could not save folder.');
+    } finally {
+      setSavingFolder(false);
+    }
+  };
+
+  const deleteFolder = (folder: NoteFolder) => {
+    Alert.alert('Delete Folder', `Delete "${folder.name}"? Notes inside will be moved to All Notes.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await api.deleteNoteFolder(folder.id);
+          if (activeFolderId === folder.id) selectFolder(null);
+          else loadFolders();
+        },
+      },
+    ]);
+  };
+
+  const activeFolder = folders.find(fo => fo.id === activeFolderId);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      {/* Folder strip */}
+      <View style={[styles.folderStrip, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.folderScroll}>
+          <TouchableOpacity
+            style={[styles.folderChip, { borderColor: c.border }, activeFolderId === null && { backgroundColor: '#1976d2', borderColor: '#1976d2' }]}
+            onPress={() => selectFolder(null)}
+          >
+            <Text style={[styles.folderChipText, { color: activeFolderId === null ? '#fff' : c.textSecondary, fontSize: f.label }]}>
+              All Notes
+            </Text>
+          </TouchableOpacity>
+
+          {folders.map(fo => (
+            <TouchableOpacity
+              key={fo.id}
+              style={[styles.folderChip, { borderColor: fo.color ?? '#1976d2' }, activeFolderId === fo.id && { backgroundColor: fo.color ?? '#1976d2' }]}
+              onPress={() => selectFolder(fo.id)}
+              onLongPress={() => openEditFolder(fo)}
+            >
+              <Text style={[styles.folderChipText, { color: activeFolderId === fo.id ? '#fff' : (fo.color ?? c.textSecondary), fontSize: f.label }]}>
+                {fo.name} ({fo.noteCount})
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          <TouchableOpacity style={[styles.folderChip, styles.folderChipAdd, { borderColor: c.border }]} onPress={openNewFolder}>
+            <Text style={[styles.folderChipText, { color: c.textMuted, fontSize: f.label }]}>+ Folder</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
       {loadError && (
-        <TouchableOpacity style={styles.errorBanner} onPress={load}>
+        <TouchableOpacity style={styles.errorBanner} onPress={() => loadNotes(activeFolderId ?? undefined)}>
           <Text style={styles.errorBannerText}>Could not reach server — tap to retry</Text>
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity style={styles.addBtn} onPress={() => openNew()}>
-        <Text style={styles.addBtnText}>+ New Note</Text>
+      {/* Add note button */}
+      <TouchableOpacity style={[styles.addBtn, { backgroundColor: c.primary }]} onPress={() => openNewNote()}>
+        <Text style={[styles.addBtnText, { fontSize: f.body }]}>
+          + New Note{activeFolder ? ` in ${activeFolder.name}` : ''}
+        </Text>
       </TouchableOpacity>
 
-      <FlatList
-        data={notes}
-        keyExtractor={n => String(n.id)}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={<Text style={styles.empty}>{loadError ? 'Notes unavailable — check your connection.' : 'No notes yet. Tap "+ New Note" to create one.'}</Text>}
-        renderItem={({ item: n }) => (
-          <TouchableOpacity style={styles.card} onPress={() => openEdit(n)}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle} numberOfLines={1}>{n.title}</Text>
-              <Text style={styles.cardDate}>{new Date(n.updatedAt).toLocaleDateString()}</Text>
-            </View>
-            <Text style={styles.cardContent} numberOfLines={3}>{n.content}</Text>
-            {n.sourceRef && <Text style={styles.cardRef}>{n.sourceType === 'bible' ? '📖' : '📜'} {n.sourceRef}</Text>}
-            <TouchableOpacity style={styles.deleteBtn} onPress={() => remove(n.id)}>
-              <Text style={styles.deleteBtnText}>Delete</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        )}
-      />
+      {/* Notes list */}
+      {loading ? (
+        <ActivityIndicator style={styles.center} size="large" color={c.primary} />
+      ) : (
+        <FlatList
+          data={notes}
+          keyExtractor={n => String(n.id)}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <Text style={[styles.empty, { color: c.textMuted, fontSize: f.body }]}>
+              {loadError ? 'Notes unavailable — check your connection.' : 'No notes here yet.'}
+            </Text>
+          }
+          renderItem={({ item: n }) => {
+            const folder = folders.find(fo => fo.id === n.folderId);
+            return (
+              <TouchableOpacity style={[styles.card, { backgroundColor: c.surface, shadowColor: c.cardShadow }]} onPress={() => openEditNote(n)}>
+                {folder && (
+                  <View style={[styles.cardFolderTag, { backgroundColor: folder.color ?? '#1976d2' }]}>
+                    <Text style={styles.cardFolderTagText}>{folder.name}</Text>
+                  </View>
+                )}
+                <View style={styles.cardHeader}>
+                  <Text style={[styles.cardTitle, { color: c.textPrimary, fontSize: f.body + 2 }]} numberOfLines={1}>{n.title}</Text>
+                  <Text style={[styles.cardDate, { color: c.textMuted, fontSize: f.label - 1 }]}>{new Date(n.updatedAt).toLocaleDateString()}</Text>
+                </View>
+                <Text style={[styles.cardContent, { color: c.textSecondary, fontSize: f.body }]} numberOfLines={4}>{n.content}</Text>
+                {n.sourceRef && (
+                  <Text style={[styles.cardRef, { color: c.primary, fontSize: f.label }]}>
+                    {n.sourceType === 'bible' ? '📖' : '📜'} {n.sourceRef}
+                  </Text>
+                )}
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteNote(n.id)}>
+                  <Text style={styles.deleteBtnText}>Delete</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      )}
 
-      <Modal visible={modalOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalOpen(false)}>
-        <ScrollView style={styles.modal} contentContainerStyle={styles.modalContent}>
+      {/* Note modal */}
+      <Modal visible={noteModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setNoteModal(false)}>
+        <ScrollView style={[styles.modal, { backgroundColor: c.background }]} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editId ? 'Edit Note' : 'New Note'}</Text>
-            <TouchableOpacity onPress={() => setModalOpen(false)}>
-              <Text style={styles.modalClose}>✕</Text>
+            <Text style={[styles.modalTitle, { color: c.textPrimary }]}>{editNoteId ? 'Edit Note' : 'New Note'}</Text>
+            <TouchableOpacity onPress={() => setNoteModal(false)}>
+              <Text style={[styles.modalClose, { color: c.textMuted }]}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>Title</Text>
+          <Text style={[styles.label, { color: c.textSecondary, fontSize: f.label }]}>Title</Text>
           <TextInput
-            style={styles.input}
-            value={form.title}
-            onChangeText={v => setForm(f => ({ ...f, title: v }))}
+            style={[styles.input, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
+            value={noteForm.title}
+            onChangeText={v => setNoteForm(fo => ({ ...fo, title: v }))}
             placeholder="Note title…"
+            placeholderTextColor={c.textMuted}
           />
 
-          <Text style={styles.label}>Note</Text>
+          <Text style={[styles.label, { color: c.textSecondary, fontSize: f.label }]}>Folder</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.folderPickerScroll}>
+            <TouchableOpacity
+              style={[styles.folderPickerChip, { borderColor: c.border }, !noteForm.folderId && { backgroundColor: '#1976d2', borderColor: '#1976d2' }]}
+              onPress={() => setNoteForm(fo => ({ ...fo, folderId: undefined }))}
+            >
+              <Text style={[styles.folderPickerText, { color: !noteForm.folderId ? '#fff' : c.textMuted }]}>None</Text>
+            </TouchableOpacity>
+            {folders.map(fo => (
+              <TouchableOpacity
+                key={fo.id}
+                style={[styles.folderPickerChip, { borderColor: fo.color ?? '#1976d2' }, noteForm.folderId === fo.id && { backgroundColor: fo.color ?? '#1976d2' }]}
+                onPress={() => setNoteForm(fn => ({ ...fn, folderId: fo.id }))}
+              >
+                <Text style={[styles.folderPickerText, { color: noteForm.folderId === fo.id ? '#fff' : (fo.color ?? c.textMuted) }]}>{fo.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <Text style={[styles.label, { color: c.textSecondary, fontSize: f.label }]}>Note</Text>
           <TextInput
-            style={[styles.input, styles.inputMulti]}
-            value={form.content}
-            onChangeText={v => setForm(f => ({ ...f, content: v }))}
+            style={[styles.input, styles.inputMulti, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
+            value={noteForm.content}
+            onChangeText={v => setNoteForm(fo => ({ ...fo, content: v }))}
             placeholder="Write your note…"
+            placeholderTextColor={c.textMuted}
             multiline
+            textAlignVertical="top"
           />
 
           <TouchableOpacity
-            style={[styles.saveBtn, (!form.title.trim() || !form.content.trim() || saving) && styles.saveBtnDisabled]}
-            onPress={save}
-            disabled={!form.title.trim() || !form.content.trim() || saving}
+            style={[styles.saveBtn, { backgroundColor: c.primary }, (!noteForm.title.trim() || !noteForm.content.trim() || savingNote) && styles.saveBtnDisabled]}
+            onPress={saveNote}
+            disabled={!noteForm.title.trim() || !noteForm.content.trim() || savingNote}
           >
-            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Note'}</Text>
+            <Text style={[styles.saveBtnText, { fontSize: f.body }]}>{savingNote ? 'Saving…' : 'Save Note'}</Text>
           </TouchableOpacity>
+        </ScrollView>
+      </Modal>
+
+      {/* Folder modal */}
+      <Modal visible={folderModal} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setFolderModal(false)}>
+        <ScrollView style={[styles.modal, { backgroundColor: c.background }]} contentContainerStyle={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: c.textPrimary }]}>{editFolderId ? 'Edit Folder' : 'New Folder'}</Text>
+            <TouchableOpacity onPress={() => setFolderModal(false)}>
+              <Text style={[styles.modalClose, { color: c.textMuted }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.label, { color: c.textSecondary, fontSize: f.label }]}>Name</Text>
+          <TextInput
+            style={[styles.input, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
+            value={folderForm.name}
+            onChangeText={v => setFolderForm(fo => ({ ...fo, name: v }))}
+            placeholder="Folder name…"
+            placeholderTextColor={c.textMuted}
+          />
+
+          <Text style={[styles.label, { color: c.textSecondary, fontSize: f.label }]}>Color</Text>
+          <View style={styles.colorRow}>
+            {FOLDER_COLORS.map(col => (
+              <TouchableOpacity
+                key={col}
+                style={[styles.colorSwatch, { backgroundColor: col }, folderForm.color === col && styles.colorSwatchSelected]}
+                onPress={() => setFolderForm(fo => ({ ...fo, color: col }))}
+              />
+            ))}
+          </View>
+
+          <View style={styles.folderActions}>
+            <TouchableOpacity
+              style={[styles.saveBtn, { backgroundColor: c.primary, flex: 1 }, (!folderForm.name.trim() || savingFolder) && styles.saveBtnDisabled]}
+              onPress={saveFolder}
+              disabled={!folderForm.name.trim() || savingFolder}
+            >
+              <Text style={[styles.saveBtnText, { fontSize: f.body }]}>{savingFolder ? 'Saving…' : 'Save'}</Text>
+            </TouchableOpacity>
+            {editFolderId && (
+              <TouchableOpacity style={styles.deleteFolderBtn} onPress={() => { setFolderModal(false); deleteFolder(folders.find(fo => fo.id === editFolderId)!); }}>
+                <Text style={styles.deleteFolderBtnText}>Delete Folder</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </ScrollView>
       </Modal>
     </View>
@@ -133,31 +337,47 @@ export default function NotesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1 },
+  center: { flex: 1, marginTop: 60 },
+  folderStrip: { borderBottomWidth: 1 },
+  folderScroll: { paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: 'row' },
+  folderChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  folderChipAdd: { borderStyle: 'dashed' },
+  folderChipText: { fontWeight: '600' },
   errorBanner: { backgroundColor: '#d32f2f', padding: 10, alignItems: 'center' },
   errorBannerText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  center: { flex: 1 },
-  addBtn: { margin: 12, backgroundColor: '#1976d2', borderRadius: 8, padding: 13, alignItems: 'center' },
-  addBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  list: { paddingHorizontal: 12, paddingBottom: 12 },
-  card: { backgroundColor: '#fff', borderRadius: 8, padding: 14, marginBottom: 10, elevation: 1, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#212121', flex: 1 },
-  cardDate: { fontSize: 11, color: '#aaa', marginLeft: 8 },
-  cardContent: { fontSize: 13, color: '#555', lineHeight: 19 },
-  cardRef: { fontSize: 11, color: '#1976d2', marginTop: 6 },
-  deleteBtn: { marginTop: 10, alignSelf: 'flex-end' },
-  deleteBtnText: { fontSize: 12, color: '#d32f2f' },
-  empty: { textAlign: 'center', color: '#999', marginTop: 48 },
-  modal: { flex: 1, backgroundColor: '#fff' },
-  modalContent: { padding: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold' },
-  modalClose: { fontSize: 20, color: '#888' },
-  label: { fontSize: 13, color: '#666', marginBottom: 4, marginTop: 12 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 15 },
-  inputMulti: { minHeight: 160, textAlignVertical: 'top' },
-  saveBtn: { marginTop: 24, backgroundColor: '#1976d2', borderRadius: 8, padding: 14, alignItems: 'center' },
-  saveBtnDisabled: { backgroundColor: '#bbb' },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  addBtn: { margin: 16, borderRadius: 10, padding: 15, alignItems: 'center' },
+  addBtnText: { color: '#fff', fontWeight: '600' },
+  list: { paddingHorizontal: 16, paddingBottom: 24 },
+  card: { borderRadius: 12, padding: 18, marginBottom: 14, shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2, overflow: 'hidden' },
+  cardFolderTag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 10 },
+  cardFolderTagText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  cardTitle: { fontWeight: '700', flex: 1 },
+  cardDate: { marginLeft: 8 },
+  cardContent: { lineHeight: 23 },
+  cardRef: { marginTop: 10 },
+  deleteBtn: { marginTop: 14, alignSelf: 'flex-end' },
+  deleteBtnText: { fontSize: 13, color: '#d32f2f' },
+  empty: { textAlign: 'center', marginTop: 60 },
+  modal: { flex: 1 },
+  modalContent: { padding: 24, paddingBottom: 48 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold' },
+  modalClose: { fontSize: 22 },
+  label: { fontWeight: '600', marginBottom: 6, marginTop: 16 },
+  input: { borderWidth: 1, borderRadius: 10, padding: 14 },
+  inputMulti: { minHeight: 220, textAlignVertical: 'top' },
+  folderPickerScroll: { marginBottom: 4 },
+  folderPickerChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, marginRight: 8 },
+  folderPickerText: { fontSize: 13, fontWeight: '600' },
+  saveBtn: { borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 28 },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveBtnText: { color: '#fff', fontWeight: 'bold' },
+  colorRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginTop: 4 },
+  colorSwatch: { width: 36, height: 36, borderRadius: 18 },
+  colorSwatchSelected: { borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+  folderActions: { flexDirection: 'row', gap: 12, alignItems: 'center', marginTop: 8 },
+  deleteFolderBtn: { paddingHorizontal: 16, paddingVertical: 16 },
+  deleteFolderBtnText: { color: '#d32f2f', fontWeight: '600', fontSize: 14 },
 });

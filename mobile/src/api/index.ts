@@ -1,5 +1,5 @@
 import client from './client';
-import type { Book, BooksResponse, Checkout, Reservation, Member, AuthUser, ChatResponse } from '../types';
+import type { Book, BooksResponse, Checkout, Reservation, Member, AuthUser, ChatResponse, NoteFolder } from '../types';
 
 export const login = (email: string, password: string) =>
   client.post<{ token: string; user: AuthUser }>('/auth/login', { email, password });
@@ -58,9 +58,16 @@ export const createHighlight = (sourceType: string, sourceRef: string, selectedT
 export const deleteHighlight = (id: number) => client.delete(`/highlights/${id}`);
 
 // Notes
-export const getNotes = () => client.get<UserNote[]>('/notes');
-export const createNote = (data: { title: string; content: string; sourceType?: string; sourceRef?: string }) =>
+export const getNotes = (folderId?: number) =>
+  client.get<UserNote[]>('/notes', { params: folderId != null ? { folderId } : {} });
+export const createNote = (data: { title: string; content: string; sourceType?: string; sourceRef?: string; folderId?: number }) =>
   client.post<UserNote>('/notes', data);
-export const updateNote = (id: number, data: { title: string; content: string; sourceType?: string; sourceRef?: string }) =>
+export const updateNote = (id: number, data: { title: string; content: string; sourceType?: string; sourceRef?: string; folderId?: number }) =>
   client.put<UserNote>(`/notes/${id}`, data);
 export const deleteNote = (id: number) => client.delete(`/notes/${id}`);
+
+// Note Folders
+export const getNoteFolders = () => client.get<NoteFolder[]>('/note-folders');
+export const createNoteFolder = (name: string, color?: string) => client.post<NoteFolder>('/note-folders', { name, color });
+export const updateNoteFolder = (id: number, name: string, color?: string) => client.put<NoteFolder>(`/note-folders/${id}`, { name, color });
+export const deleteNoteFolder = (id: number) => client.delete(`/note-folders/${id}`);
