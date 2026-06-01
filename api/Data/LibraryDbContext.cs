@@ -17,6 +17,7 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SearchHistory> SearchHistories => Set<SearchHistory>();
     public DbSet<UserHighlight> UserHighlights => Set<UserHighlight>();
     public DbSet<UserNote> UserNotes => Set<UserNote>();
+    public DbSet<NoteFolder> NoteFolders => Set<NoteFolder>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -74,6 +75,13 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<UserNote>(b =>
         {
             b.HasIndex(x => x.UserId);
+            b.HasOne(x => x.Folder).WithMany(x => x.Notes).HasForeignKey(x => x.FolderId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<NoteFolder>(b =>
+        {
+            b.HasIndex(x => x.UserId);
+            b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         });
     }
 }

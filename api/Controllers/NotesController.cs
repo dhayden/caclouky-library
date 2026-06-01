@@ -17,13 +17,15 @@ public class NotesController : ControllerBase
 
     public NotesController(LibraryDbContext db) => _db = db;
 
-    // GET /api/notes
+    // GET /api/notes?folderId=1
     [HttpGet]
-    public async Task<IActionResult> GetAll() =>
-        Ok(await _db.UserNotes
-            .Where(n => n.UserId == UserId)
-            .OrderByDescending(n => n.UpdatedAt)
-            .ToListAsync());
+    public async Task<IActionResult> GetAll([FromQuery] int? folderId)
+    {
+        var query = _db.UserNotes.Where(n => n.UserId == UserId);
+        if (folderId.HasValue)
+            query = query.Where(n => n.FolderId == folderId);
+        return Ok(await query.OrderByDescending(n => n.UpdatedAt).ToListAsync());
+    }
 
     // GET /api/notes/{id}
     [HttpGet("{id:int}")]
@@ -45,6 +47,7 @@ public class NotesController : ControllerBase
             Content    = req.Content,
             SourceType = req.SourceType,
             SourceRef  = req.SourceRef,
+            FolderId   = req.FolderId,
             CreatedAt  = DateTime.UtcNow,
             UpdatedAt  = DateTime.UtcNow
         };
@@ -63,6 +66,7 @@ public class NotesController : ControllerBase
         n.Content    = req.Content;
         n.SourceType = req.SourceType;
         n.SourceRef  = req.SourceRef;
+        n.FolderId   = req.FolderId;
         n.UpdatedAt  = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return Ok(n);
@@ -80,4 +84,4 @@ public class NotesController : ControllerBase
     }
 }
 
-public record NoteRequest(string Title, string Content, string? SourceType, string? SourceRef);
+public record NoteRequest(string Title, string Content, string? SourceType, string? SourceRef, int? FolderId);
