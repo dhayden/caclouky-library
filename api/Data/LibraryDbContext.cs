@@ -18,6 +18,7 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<UserHighlight> UserHighlights => Set<UserHighlight>();
     public DbSet<UserNote> UserNotes => Set<UserNote>();
     public DbSet<NoteFolder> NoteFolders => Set<NoteFolder>();
+    public DbSet<ScriptureTeaching> ScriptureTeachings => Set<ScriptureTeaching>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -82,6 +83,13 @@ public class LibraryDbContext : IdentityDbContext<ApplicationUser>
         {
             b.HasIndex(x => x.UserId);
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        });
+
+        builder.Entity<ScriptureTeaching>(b =>
+        {
+            b.HasIndex(x => new { x.Book, x.Chapter, x.Verse }).IsUnique();
+            b.Property(x => x.Reference).HasMaxLength(100).IsRequired();
+            b.Property(x => x.Book).HasMaxLength(100).IsRequired();
         });
     }
 }

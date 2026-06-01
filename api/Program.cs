@@ -100,6 +100,8 @@ builder.Services.AddHttpClient<CacloukyLibrary.Services.BibleService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.BibleService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.PdfIndexService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.SearchService>();
+builder.Services.AddScoped<CacloukyLibrary.Services.ScripturePreloadService>();
+builder.Services.AddSingleton<CacloukyLibrary.Services.ScripturePreloadStatus>();
 builder.Services.AddSingleton<CacloukyLibrary.Services.IndexingQueue>();
 builder.Services.AddSingleton<CacloukyLibrary.Services.IndexingStatus>();
 builder.Services.AddHostedService<CacloukyLibrary.Services.IndexingWorker>();
