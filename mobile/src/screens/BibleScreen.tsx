@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Modal, ScrollView, Alert,
@@ -8,6 +8,16 @@ import * as api from '../api';
 import { useDisplay } from '../context/DisplayContext';
 
 type VerseTab = 'verse' | 'note' | 'sowders';
+
+interface ExpandedState {
+  verseId: number;
+  tab: VerseTab;
+  noteTitle: string;
+  noteContent: string;
+  savingNote: boolean;
+  sowdersText: string;
+  sowdersLoading: boolean;
+}
 
 export default function BibleScreen() {
   const { theme } = useDisplay();
@@ -22,17 +32,8 @@ export default function BibleScreen() {
   const [searchResults, setSearchResults] = useState<BibleVerse[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [bookPickerOpen, setBookPickerOpen] = useState(false);
-  const [verseModal, setVerseModal] = useState<BibleVerse | null>(null);
-  const [activeTab, setActiveTab] = useState<VerseTab>('verse');
-
-  // Note form state
-  const [noteTitle, setNoteTitle] = useState('');
-  const [noteContent, setNoteContent] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
-
-  // Sowders state
-  const [sowdersText, setSowdersText] = useState('');
-  const [sowdersLoading, setSowdersLoading] = useState(false);
+  const [expanded, setExpanded] = useState<ExpandedState | null>(null);
+  const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
     api.getBibleBooks().then(r => {
@@ -44,6 +45,7 @@ export default function BibleScreen() {
   useEffect(() => {
     if (!selectedBook) return;
     setLoading(true);
+    setExpanded(null);
     api.getBibleChapter(selectedBook, chapter)
       .then(r => setVerses(r.data))
       .catch(() => setVerses([]))
@@ -53,6 +55,7 @@ export default function BibleScreen() {
   const doSearch = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
+    setExpanded(null);
     try {
       const res = await api.searchBible(searchQuery);
       setSearchResults(res.data);
@@ -61,61 +64,119 @@ export default function BibleScreen() {
     }
   };
 
-  const clearSearch = () => { setSearchResults(null); setSearchQuery(''); };
+  const clearSearch = () => { setSearchResults(null); setSearchQuery(''); setExpanded(null); };
 
-  const openVerse = (v: BibleVerse) => {
-    setVerseModal(v);
-    setActiveTab('verse');
-    setNoteTitle('');
-    setNoteContent('');
-    setSowdersText('');
-  };
-
-  const saveNote = async () => {
-    if (!verseModal || !noteTitle.trim() || !noteContent.trim()) return;
-    setSavingNote(true);
-    try {
-      const ref = `${verseModal.book} ${verseModal.chapter}:${verseModal.verse}`;
-      await api.createNote({ title: noteTitle, content: noteContent, sourceType: 'bible', sourceRef: ref });
-      Alert.alert('Saved', 'Note saved successfully.');
-      setNoteTitle('');
-      setNoteContent('');
-      setActiveTab('verse');
-    } catch {
-      Alert.alert('Error', 'Could not save note. Check your connection.');
-    } finally {
-      setSavingNote(false);
+  const toggleVerse = (v: BibleVerse) => {
+    if (expanded?.verseId === v.id) {
+      setExpanded(null);
+    } else {
+      setExpanded({ verseId: v.id, tab: 'verse', noteTitle: '', noteContent: '', savingNote: false, sowdersText: '', sowdersLoading: false });
     }
   };
 
-  const loadSowders = useCallback(async () => {
-    if (!verseModal || sowdersText || sowdersLoading) return;
-    setSowdersLoading(true);
+  const setTab = (tab: VerseTab, verse: BibleVerse) => {
+    setExpanded(e => e ? { ...e, tab } : null);
+    if (tab === 'sowders' && !expanded?.sowdersText && !expanded?.sowdersLoading) {
+      loadSowders(verse);
+    }
+  };
+
+  const loadSowders = useCallback(async (verse: BibleVerse) => {
+    setExpanded(e => e ? { ...e, sowdersLoading: true } : null);
     try {
-      const ref = `${verseModal.book} ${verseModal.chapter}:${verseModal.verse}`;
+      const ref = `${verse.book} ${verse.chapter}:${verse.verse}`;
       const res = await api.chatSearch(`What did Brother Sowders teach about ${ref}?`);
-      setSowdersText(res.data.answer);
+      setExpanded(e => e ? { ...e, sowdersText: res.data.answer, sowdersLoading: false } : null);
     } catch {
-      setSowdersText('Could not load teaching. Check your connection.');
-    } finally {
-      setSowdersLoading(false);
+      setExpanded(e => e ? { ...e, sowdersText: 'Could not load. Check your connection.', sowdersLoading: false } : null);
     }
-  }, [verseModal, sowdersText, sowdersLoading]);
+  }, []);
 
-  useEffect(() => {
-    if (activeTab === 'sowders') loadSowders();
-  }, [activeTab]);
+  const saveNote = async (verse: BibleVerse) => {
+    if (!expanded?.noteTitle.trim() || !expanded?.noteContent.trim()) return;
+    setExpanded(e => e ? { ...e, savingNote: true } : null);
+    try {
+      const ref = `${verse.book} ${verse.chapter}:${verse.verse}`;
+      await api.createNote({ title: expanded.noteTitle, content: expanded.noteContent, sourceType: 'bible', sourceRef: ref });
+      Alert.alert('Saved', 'Note saved.');
+      setExpanded(e => e ? { ...e, noteTitle: '', noteContent: '', savingNote: false, tab: 'verse' } : null);
+    } catch {
+      Alert.alert('Error', 'Could not save note.');
+      setExpanded(e => e ? { ...e, savingNote: false } : null);
+    }
+  };
 
   const displayVerses = searchResults ?? verses;
 
-  const tabStyle = (tab: VerseTab) => [
-    styles.tab,
-    { borderBottomColor: activeTab === tab ? c.primary : 'transparent', borderColor: c.border },
-  ];
-  const tabTextStyle = (tab: VerseTab) => [
-    styles.tabText,
-    { color: activeTab === tab ? c.primary : c.textMuted, fontSize: f.label },
-  ];
+  const renderPanel = (verse: BibleVerse) => {
+    if (!expanded || expanded.verseId !== verse.id) return null;
+    const e = expanded;
+
+    return (
+      <View style={[styles.panel, { backgroundColor: theme.dark ? '#1a2a3a' : '#e8f0fe', borderColor: c.primary }]}>
+        {/* Tabs */}
+        <View style={[styles.panelTabs, { borderBottomColor: c.border }]}>
+          {(['verse', 'note', 'sowders'] as VerseTab[]).map(tab => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.panelTab, e.tab === tab && { borderBottomColor: c.primary, borderBottomWidth: 2 }]}
+              onPress={() => setTab(tab, verse)}
+            >
+              <Text style={[styles.panelTabText, { color: e.tab === tab ? c.primary : c.textMuted, fontSize: f.label }]}>
+                {tab === 'verse' ? 'Verse' : tab === 'note' ? '+ Note' : 'Bro. Sowders'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Verse tab */}
+        {e.tab === 'verse' && (
+          <Text style={[styles.panelVerseText, { color: c.textPrimary, fontSize: f.verse }]}>
+            {verse.text}
+          </Text>
+        )}
+
+        {/* Note tab */}
+        {e.tab === 'note' && (
+          <View style={styles.panelNoteForm}>
+            <TextInput
+              style={[styles.panelInput, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
+              value={e.noteTitle}
+              onChangeText={v => setExpanded(ex => ex ? { ...ex, noteTitle: v } : null)}
+              placeholder="Note title…"
+              placeholderTextColor={c.textMuted}
+            />
+            <TextInput
+              style={[styles.panelInput, styles.panelInputMulti, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
+              value={e.noteContent}
+              onChangeText={v => setExpanded(ex => ex ? { ...ex, noteContent: v } : null)}
+              placeholder="Write your note…"
+              placeholderTextColor={c.textMuted}
+              multiline
+              textAlignVertical="top"
+            />
+            <TouchableOpacity
+              style={[styles.panelSaveBtn, { backgroundColor: c.primary }, (!e.noteTitle.trim() || !e.noteContent.trim() || e.savingNote) && { opacity: 0.4 }]}
+              onPress={() => saveNote(verse)}
+              disabled={!e.noteTitle.trim() || !e.noteContent.trim() || e.savingNote}
+            >
+              <Text style={[styles.panelSaveBtnText, { fontSize: f.body }]}>{e.savingNote ? 'Saving…' : 'Save Note'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Sowders tab */}
+        {e.tab === 'sowders' && (
+          <View style={styles.panelSowders}>
+            {e.sowdersLoading
+              ? <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} />
+              : <Text style={[styles.panelSowdersText, { color: c.textPrimary, fontSize: f.body }]}>{e.sowdersText}</Text>
+            }
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
@@ -147,7 +208,11 @@ export default function BibleScreen() {
             <Text style={[styles.bookBtnText, { color: c.primary, fontSize: f.body }]}>{selectedBook || 'Select Book'} ▼</Text>
           </TouchableOpacity>
           <View style={styles.chapterNav}>
-            <TouchableOpacity style={[styles.chapterBtn, { backgroundColor: c.primary }, chapter <= 1 && styles.chapterBtnDisabled]} onPress={() => chapter > 1 && setChapter(ch => ch - 1)} disabled={chapter <= 1}>
+            <TouchableOpacity
+              style={[styles.chapterBtn, { backgroundColor: c.primary }, chapter <= 1 && { opacity: 0.3 }]}
+              onPress={() => chapter > 1 && setChapter(ch => ch - 1)}
+              disabled={chapter <= 1}
+            >
               <Text style={styles.chapterBtnText}>‹</Text>
             </TouchableOpacity>
             <Text style={[styles.chapterLabel, { color: c.textPrimary, fontSize: f.body }]}>Ch. {chapter}</Text>
@@ -159,25 +224,40 @@ export default function BibleScreen() {
       )}
 
       {searchResults && (
-        <Text style={[styles.resultCount, { color: c.textMuted }]}>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"</Text>
+        <Text style={[styles.resultCount, { color: c.textMuted }]}>
+          {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+        </Text>
       )}
 
       {loading ? (
         <ActivityIndicator style={styles.center} size="large" color={c.primary} />
       ) : (
         <FlatList
+          ref={listRef}
           data={displayVerses}
           keyExtractor={v => String(v.id)}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={<Text style={[styles.empty, { color: c.textMuted }]}>No verses found.</Text>}
-          renderItem={({ item: v }) => (
-            <TouchableOpacity style={[styles.verseRow, { borderBottomColor: c.border }]} onPress={() => openVerse(v)}>
-              <Text style={[styles.verseNum, { color: c.primary, fontSize: f.label }]}>
-                {searchResults ? `${v.book} ${v.chapter}:${v.verse}` : v.verse}
-              </Text>
-              <Text style={[styles.verseText, { color: c.textPrimary, fontSize: f.verse }]}>{v.text}</Text>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item: v }) => {
+            const isExpanded = expanded?.verseId === v.id;
+            return (
+              <View>
+                <TouchableOpacity
+                  style={[styles.verseRow, { borderBottomColor: isExpanded ? 'transparent' : c.border }, isExpanded && { backgroundColor: theme.dark ? '#1a2a3a' : '#e8f0fe' }]}
+                  onPress={() => toggleVerse(v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.verseNum, { color: c.primary, fontSize: f.label }]}>
+                    {searchResults ? `${v.book} ${v.chapter}:${v.verse}` : v.verse}
+                  </Text>
+                  <Text style={[styles.verseText, { color: c.textPrimary, fontSize: f.verse }]}>{v.text}</Text>
+                  <Text style={[styles.verseChevron, { color: c.textMuted }]}>{isExpanded ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+                {renderPanel(v)}
+              </View>
+            );
+          }}
         />
       )}
 
@@ -204,80 +284,6 @@ export default function BibleScreen() {
           />
         </View>
       </Modal>
-
-      {/* Verse detail modal */}
-      <Modal visible={!!verseModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setVerseModal(null)}>
-        <View style={[styles.verseSheet, { backgroundColor: c.background }]}>
-          {/* Header */}
-          <View style={[styles.sheetHeader, { borderBottomColor: c.border }]}>
-            <Text style={[styles.sheetRef, { color: c.primary, fontSize: f.heading }]}>
-              {verseModal && `${verseModal.book} ${verseModal.chapter}:${verseModal.verse}`}
-            </Text>
-            <TouchableOpacity onPress={() => setVerseModal(null)}>
-              <Text style={[styles.sheetClose, { color: c.textMuted }]}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Tabs */}
-          <View style={[styles.tabs, { borderBottomColor: c.border }]}>
-            {(['verse', 'note', 'sowders'] as VerseTab[]).map(tab => (
-              <TouchableOpacity key={tab} style={tabStyle(tab)} onPress={() => setActiveTab(tab)}>
-                <Text style={tabTextStyle(tab)}>
-                  {tab === 'verse' ? 'Verse' : tab === 'note' ? '+ Note' : "Bro. Sowders"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
-            {activeTab === 'verse' && (
-              <Text style={[styles.verseFullText, { color: c.textPrimary, fontSize: f.verse }]}>
-                {verseModal?.text}
-              </Text>
-            )}
-
-            {activeTab === 'note' && (
-              <View style={styles.noteForm}>
-                <Text style={[styles.noteLabel, { color: c.textSecondary, fontSize: f.label }]}>Title</Text>
-                <TextInput
-                  style={[styles.noteInput, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
-                  value={noteTitle}
-                  onChangeText={setNoteTitle}
-                  placeholder="Note title…"
-                  placeholderTextColor={c.textMuted}
-                />
-                <Text style={[styles.noteLabel, { color: c.textSecondary, fontSize: f.label, marginTop: 14 }]}>Note</Text>
-                <TextInput
-                  style={[styles.noteInput, styles.noteInputMulti, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
-                  value={noteContent}
-                  onChangeText={setNoteContent}
-                  placeholder="Write your note…"
-                  placeholderTextColor={c.textMuted}
-                  multiline
-                  textAlignVertical="top"
-                />
-                <TouchableOpacity
-                  style={[styles.saveNoteBtn, { backgroundColor: c.primary }, (!noteTitle.trim() || !noteContent.trim() || savingNote) && styles.saveBtnDisabled]}
-                  onPress={saveNote}
-                  disabled={!noteTitle.trim() || !noteContent.trim() || savingNote}
-                >
-                  <Text style={styles.saveNoteBtnText}>{savingNote ? 'Saving…' : 'Save Note'}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {activeTab === 'sowders' && (
-              <View>
-                {sowdersLoading ? (
-                  <ActivityIndicator style={{ marginTop: 40 }} color={c.primary} />
-                ) : sowdersText ? (
-                  <Text style={[styles.sowdersText, { color: c.textPrimary, fontSize: f.body }]}>{sowdersText}</Text>
-                ) : null}
-              </View>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -295,37 +301,34 @@ const styles = StyleSheet.create({
   bookBtnText: { fontWeight: '600' },
   chapterNav: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   chapterBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  chapterBtnDisabled: { opacity: 0.4 },
   chapterBtnText: { color: '#fff', fontSize: 18 },
   chapterLabel: { fontWeight: '600', minWidth: 50, textAlign: 'center' },
   resultCount: { fontSize: 12, paddingHorizontal: 12, paddingVertical: 6 },
   center: { flex: 1 },
-  list: { padding: 12 },
-  verseRow: { flexDirection: 'row', gap: 10, paddingVertical: 10, borderBottomWidth: 1 },
-  verseNum: { fontWeight: 'bold', minWidth: 24, marginTop: 2 },
+  list: { paddingBottom: 40 },
+  verseRow: { flexDirection: 'row', gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, alignItems: 'flex-start' },
+  verseNum: { fontWeight: 'bold', minWidth: 28, marginTop: 2 },
   verseText: { flex: 1, lineHeight: 24 },
+  verseChevron: { fontSize: 10, marginTop: 6 },
   empty: { textAlign: 'center', marginTop: 48 },
+  // Inline panel
+  panel: { marginHorizontal: 0, borderLeftWidth: 3, borderBottomWidth: 1, paddingBottom: 16 },
+  panelTabs: { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 12 },
+  panelTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  panelTabText: { fontWeight: '600' },
+  panelVerseText: { paddingHorizontal: 16, lineHeight: 28, fontStyle: 'italic' },
+  panelNoteForm: { paddingHorizontal: 12, gap: 8 },
+  panelInput: { borderWidth: 1, borderRadius: 8, padding: 10 },
+  panelInputMulti: { minHeight: 120, textAlignVertical: 'top' },
+  panelSaveBtn: { borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 4 },
+  panelSaveBtnText: { color: '#fff', fontWeight: 'bold' },
+  panelSowders: { paddingHorizontal: 16 },
+  panelSowdersText: { lineHeight: 26 },
+  // Book picker
   pickerModal: { flex: 1, padding: 16 },
   pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   pickerTitle: { fontSize: 18, fontWeight: 'bold' },
   pickerClose: { fontSize: 20 },
   bookItem: { paddingVertical: 14, paddingHorizontal: 8, borderBottomWidth: 1 },
   bookItemText: { fontWeight: '500' },
-  verseSheet: { flex: 1 },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
-  sheetRef: { fontWeight: 'bold' },
-  sheetClose: { fontSize: 22 },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1 },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 3 },
-  tabText: { fontWeight: '600' },
-  sheetBody: { padding: 20, paddingBottom: 48 },
-  verseFullText: { lineHeight: 30, fontStyle: 'italic' },
-  noteForm: { gap: 4 },
-  noteLabel: { fontWeight: '600', marginBottom: 6 },
-  noteInput: { borderWidth: 1, borderRadius: 10, padding: 12 },
-  noteInputMulti: { minHeight: 180, textAlignVertical: 'top', marginTop: 4 },
-  saveNoteBtn: { marginTop: 20, borderRadius: 10, padding: 14, alignItems: 'center' },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveNoteBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  sowdersText: { lineHeight: 26 },
 });
