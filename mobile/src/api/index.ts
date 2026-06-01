@@ -32,6 +32,11 @@ export const deactivateMember = (id: string) => client.put(`/members/${id}/deact
 export const chatSearch = (question: string) =>
   client.post<ChatResponse>('/search/chat', { question });
 
+export const getScriptureTeaching = (book: string, chapter: number, verse: number) =>
+  client.get<{ reference: string; teaching: string; generatedAt: string; fromStore: boolean }>(
+    '/search/scripture-teaching', { params: { book, chapter, verse } }
+  );
+
 export const getSermonPage = (fileName: string, pageNumber: number) =>
   client.get<{ title: string; fileName: string; pageNumber: number; pageCount: number; text: string }>(
     `/sermon-docs/page/${encodeURIComponent(fileName)}/${pageNumber}`

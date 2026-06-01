@@ -84,9 +84,8 @@ export default function BibleScreen() {
   const loadSowders = useCallback(async (verse: BibleVerse) => {
     setExpanded(e => e ? { ...e, sowdersLoading: true } : null);
     try {
-      const ref = `${verse.book} ${verse.chapter}:${verse.verse}`;
-      const res = await api.chatSearch(`What did Brother Sowders teach about ${ref}?`);
-      setExpanded(e => e ? { ...e, sowdersText: res.data.answer, sowdersLoading: false } : null);
+      const res = await api.getScriptureTeaching(verse.book, verse.chapter, verse.verse);
+      setExpanded(e => e ? { ...e, sowdersText: res.data.teaching, sowdersLoading: false } : null);
     } catch {
       setExpanded(e => e ? { ...e, sowdersText: 'Could not load. Check your connection.', sowdersLoading: false } : null);
     }
