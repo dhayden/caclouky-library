@@ -97,5 +97,28 @@ public class SearchController : ControllerBase
     // GET /api/search/preload-status
     [Authorize(Policy = "AdminOnly")]
     [HttpGet("preload-status")]
-    public IActionResult GetPreloadStatus() => Ok(_preloadStatus);
+    public IActionResult GetPreloadStatus() => Ok(new
+    {
+        _preloadStatus.IsRunning,
+        _preloadStatus.Total,
+        _preloadStatus.Completed,
+        _preloadStatus.Skipped,
+        _preloadStatus.Failed,
+        _preloadStatus.CurrentRef,
+        _preloadStatus.StartedAt,
+        _preloadStatus.EstimatedRemaining,
+        PercentComplete = _preloadStatus.Total > 0
+            ? Math.Round(_preloadStatus.Completed * 100.0 / _preloadStatus.Total, 1)
+            : 0,
+    });
+
+    // POST /api/search/cancel-preload
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPost("cancel-preload")]
+    public IActionResult CancelPreload()
+    {
+        if (!_preloadStatus.IsRunning) return BadRequest(new { message = "No preload is running." });
+        _preload.Cancel();
+        return Ok(new { message = "Cancellation requested." });
+    }
 }
