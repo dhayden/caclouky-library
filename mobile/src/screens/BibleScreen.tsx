@@ -246,6 +246,16 @@ const chooserStyles = StyleSheet.create({
   numUnderline: { height: 3, width: 28, backgroundColor: '#4caf50', marginTop: 4, borderRadius: 2 },
 });
 
+// ── Highlight colours ─────────────────────────────────────────────────────────
+
+const HIGHLIGHT_COLORS = [
+  { color: '#ffd600', label: 'Yellow' },
+  { color: '#69f0ae', label: 'Green'  },
+  { color: '#40c4ff', label: 'Blue'   },
+  { color: '#f48fb1', label: 'Pink'   },
+  { color: '#e040fb', label: 'Purple' },
+];
+
 // ── Main BibleScreen ──────────────────────────────────────────────────────────
 
 export default function BibleScreen() {
@@ -263,6 +273,29 @@ export default function BibleScreen() {
   const [chooserOpen, setChooserOpen] = useState(false);
   const [expanded, setExpanded] = useState<ExpandedState | null>(null);
   const listRef = useRef<FlatList>(null);
+
+  // Highlights + notes
+  const [highlights, setHighlights] = useState<Record<string, { id: number; color: string }>>({});
+  const [notedRefs, setNotedRefs] = useState<Set<string>>(new Set());
+  const [highlightTarget, setHighlightTarget] = useState<BibleVerse | null>(null);
+
+  const verseRef = (v: BibleVerse) => `${v.book} ${v.chapter}:${v.verse}`;
+
+  // Load all bible highlights + note refs once on mount
+  useEffect(() => {
+    api.getHighlights('bible').then(r => {
+      const map: Record<string, { id: number; color: string }> = {};
+      r.data.forEach(h => { map[h.sourceRef] = { id: h.id, color: h.color }; });
+      setHighlights(map);
+    }).catch(() => {});
+
+    api.getNotes().then(r => {
+      const refs = new Set(
+        r.data.filter(n => n.sourceType === 'bible' && n.sourceRef).map(n => n.sourceRef!)
+      );
+      setNotedRefs(refs);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     api.getBibleBooks().then(r => {
@@ -300,7 +333,6 @@ export default function BibleScreen() {
     setChapter(ch);
     setExpanded(null);
     if (verse && verse > 1) {
-      // Scroll to verse after load
       setTimeout(() => {
         listRef.current?.scrollToIndex({ index: Math.max(0, verse - 2), animated: true });
       }, 600);
@@ -308,18 +340,13 @@ export default function BibleScreen() {
   };
 
   const toggleVerse = (v: BibleVerse) => {
-    if (expanded?.verseId === v.id) {
-      setExpanded(null);
-    } else {
-      setExpanded({ verseId: v.id, tab: 'verse', noteTitle: '', noteContent: '', savingNote: false, sowdersText: '', sowdersLoading: false });
-    }
+    if (expanded?.verseId === v.id) setExpanded(null);
+    else setExpanded({ verseId: v.id, tab: 'verse', noteTitle: '', noteContent: '', savingNote: false, sowdersText: '', sowdersLoading: false });
   };
 
   const setTab = (tab: VerseTab, verse: BibleVerse) => {
     setExpanded(e => e ? { ...e, tab } : null);
-    if (tab === 'sowders' && !expanded?.sowdersText && !expanded?.sowdersLoading) {
-      loadSowders(verse);
-    }
+    if (tab === 'sowders' && !expanded?.sowdersText && !expanded?.sowdersLoading) loadSowders(verse);
   };
 
   const loadSowders = useCallback(async (verse: BibleVerse) => {
@@ -336,8 +363,9 @@ export default function BibleScreen() {
     if (!expanded?.noteTitle.trim() || !expanded?.noteContent.trim()) return;
     setExpanded(e => e ? { ...e, savingNote: true } : null);
     try {
-      const ref = `${verse.book} ${verse.chapter}:${verse.verse}`;
+      const ref = verseRef(verse);
       await api.createNote({ title: expanded.noteTitle, content: expanded.noteContent, sourceType: 'bible', sourceRef: ref });
+      setNotedRefs(prev => new Set([...prev, ref]));
       Alert.alert('Saved', 'Note saved.');
       setExpanded(e => e ? { ...e, noteTitle: '', noteContent: '', savingNote: false, tab: 'verse' } : null);
     } catch {
@@ -346,66 +374,59 @@ export default function BibleScreen() {
     }
   };
 
+  const applyHighlight = async (color: string) => {
+    if (!highlightTarget) return;
+    const ref = verseRef(highlightTarget);
+    const existing = highlights[ref];
+    try {
+      if (existing) await api.deleteHighlight(existing.id);
+      const res = await api.createHighlight('bible', ref, highlightTarget.text, color);
+      setHighlights(prev => ({ ...prev, [ref]: { id: res.data.id, color } }));
+    } catch { Alert.alert('Error', 'Could not save highlight.'); }
+    setHighlightTarget(null);
+  };
+
+  const removeHighlight = async () => {
+    if (!highlightTarget) return;
+    const ref = verseRef(highlightTarget);
+    const existing = highlights[ref];
+    if (!existing) { setHighlightTarget(null); return; }
+    try {
+      await api.deleteHighlight(existing.id);
+      setHighlights(prev => { const n = { ...prev }; delete n[ref]; return n; });
+    } catch { Alert.alert('Error', 'Could not remove highlight.'); }
+    setHighlightTarget(null);
+  };
+
   const displayVerses = searchResults ?? verses;
 
   const renderPanel = (verse: BibleVerse) => {
     if (!expanded || expanded.verseId !== verse.id) return null;
     const e = expanded;
-
     return (
       <View style={[styles.panel, { backgroundColor: theme.dark ? '#1a2a3a' : '#e8f0fe', borderColor: c.primary }]}>
         <View style={[styles.panelTabs, { borderBottomColor: c.border }]}>
           {(['verse', 'note', 'sowders'] as VerseTab[]).map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.panelTab, e.tab === tab && { borderBottomColor: c.primary, borderBottomWidth: 2 }]}
-              onPress={() => setTab(tab, verse)}
-            >
+            <TouchableOpacity key={tab} style={[styles.panelTab, e.tab === tab && { borderBottomColor: c.primary, borderBottomWidth: 2 }]} onPress={() => setTab(tab, verse)}>
               <Text style={[styles.panelTabText, { color: e.tab === tab ? c.primary : c.textMuted, fontSize: f.label }]}>
                 {tab === 'verse' ? 'Verse' : tab === 'note' ? '+ Note' : 'Bro. Sowders'}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-
-        {e.tab === 'verse' && (
-          <Text style={[styles.panelVerseText, { color: c.textPrimary, fontSize: f.verse }]}>{verse.text}</Text>
-        )}
-
+        {e.tab === 'verse' && <Text style={[styles.panelVerseText, { color: c.textPrimary, fontSize: f.verse }]}>{verse.text}</Text>}
         {e.tab === 'note' && (
           <View style={styles.panelNoteForm}>
-            <TextInput
-              style={[styles.panelInput, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
-              value={e.noteTitle}
-              onChangeText={v => setExpanded(ex => ex ? { ...ex, noteTitle: v } : null)}
-              placeholder="Note title…"
-              placeholderTextColor={c.textMuted}
-            />
-            <TextInput
-              style={[styles.panelInput, styles.panelInputMulti, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
-              value={e.noteContent}
-              onChangeText={v => setExpanded(ex => ex ? { ...ex, noteContent: v } : null)}
-              placeholder="Write your note…"
-              placeholderTextColor={c.textMuted}
-              multiline
-              textAlignVertical="top"
-            />
-            <TouchableOpacity
-              style={[styles.panelSaveBtn, { backgroundColor: c.primary }, (!e.noteTitle.trim() || !e.noteContent.trim() || e.savingNote) && { opacity: 0.4 }]}
-              onPress={() => saveNote(verse)}
-              disabled={!e.noteTitle.trim() || !e.noteContent.trim() || e.savingNote}
-            >
+            <TextInput style={[styles.panelInput, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]} value={e.noteTitle} onChangeText={v => setExpanded(ex => ex ? { ...ex, noteTitle: v } : null)} placeholder="Note title…" placeholderTextColor={c.textMuted} />
+            <TextInput style={[styles.panelInput, styles.panelInputMulti, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]} value={e.noteContent} onChangeText={v => setExpanded(ex => ex ? { ...ex, noteContent: v } : null)} placeholder="Write your note…" placeholderTextColor={c.textMuted} multiline textAlignVertical="top" />
+            <TouchableOpacity style={[styles.panelSaveBtn, { backgroundColor: c.primary }, (!e.noteTitle.trim() || !e.noteContent.trim() || e.savingNote) && { opacity: 0.4 }]} onPress={() => saveNote(verse)} disabled={!e.noteTitle.trim() || !e.noteContent.trim() || e.savingNote}>
               <Text style={[styles.panelSaveBtnText, { fontSize: f.body }]}>{e.savingNote ? 'Saving…' : 'Save Note'}</Text>
             </TouchableOpacity>
           </View>
         )}
-
         {e.tab === 'sowders' && (
           <View style={styles.panelSowders}>
-            {e.sowdersLoading
-              ? <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} />
-              : <Text style={[styles.panelSowdersText, { color: c.textPrimary, fontSize: f.body }]}>{e.sowdersText}</Text>
-            }
+            {e.sowdersLoading ? <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} /> : <Text style={[styles.panelSowdersText, { color: c.textPrimary, fontSize: f.body }]}>{e.sowdersText}</Text>}
           </View>
         )}
       </View>
@@ -416,67 +437,37 @@ export default function BibleScreen() {
     <View style={[styles.container, { backgroundColor: c.background }]}>
       {/* Search bar */}
       <View style={[styles.searchRow, { borderBottomColor: c.border }]}>
-        <TextInput
-          style={[styles.searchInput, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
-          placeholder="Search the Bible…"
-          placeholderTextColor={c.textMuted}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={doSearch}
-          returnKeyType="search"
-        />
+        <TextInput style={[styles.searchInput, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]} placeholder="Search the Bible…" placeholderTextColor={c.textMuted} value={searchQuery} onChangeText={setSearchQuery} onSubmitEditing={doSearch} returnKeyType="search" />
         <TouchableOpacity style={[styles.searchBtn, { backgroundColor: c.primary }]} onPress={doSearch}>
           <Text style={[styles.searchBtnText, { fontSize: f.label }]}>Search</Text>
         </TouchableOpacity>
-        {searchResults && (
-          <TouchableOpacity style={styles.clearBtn} onPress={clearSearch}>
-            <Text style={[styles.clearBtnText, { color: c.textMuted }]}>✕</Text>
-          </TouchableOpacity>
-        )}
+        {searchResults && <TouchableOpacity style={styles.clearBtn} onPress={clearSearch}><Text style={[styles.clearBtnText, { color: c.textMuted }]}>✕</Text></TouchableOpacity>}
       </View>
 
       {/* Nav bar */}
       {!searchResults && (
         <View style={[styles.nav, { borderBottomColor: c.border }]}>
           <TouchableOpacity style={[styles.bookBtn, { backgroundColor: theme.dark ? '#1a3a5c' : '#e3f2fd' }]} onPress={() => setChooserOpen(true)}>
-            <Text style={[styles.bookBtnText, { color: c.primary, fontSize: f.body }]}>
-              {ABBREV[selectedBook] ?? selectedBook} ▼
-            </Text>
+            <Text style={[styles.bookBtnText, { color: c.primary, fontSize: f.body }]}>{ABBREV[selectedBook] ?? selectedBook} ▼</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.bookFullBtn]} onPress={() => setChooserOpen(true)}>
-            <Text style={[styles.bookFullText, { color: c.textSecondary, fontSize: f.label }]} numberOfLines={1}>
-              {selectedBook}
-            </Text>
+          <TouchableOpacity style={styles.bookFullBtn} onPress={() => setChooserOpen(true)}>
+            <Text style={[styles.bookFullText, { color: c.textSecondary, fontSize: f.label }]} numberOfLines={1}>{selectedBook}</Text>
           </TouchableOpacity>
           <View style={styles.chapterNav}>
-            <TouchableOpacity
-              style={[styles.chapterBtn, { backgroundColor: c.primary }, chapter <= 1 && { opacity: 0.3 }]}
-              onPress={() => chapter > 1 && setChapter(ch => ch - 1)}
-              disabled={chapter <= 1}
-            >
+            <TouchableOpacity style={[styles.chapterBtn, { backgroundColor: c.primary }, chapter <= 1 && { opacity: 0.3 }]} onPress={() => chapter > 1 && setChapter(ch => ch - 1)} disabled={chapter <= 1}>
               <Text style={styles.chapterBtnText}>‹</Text>
             </TouchableOpacity>
             <Text style={[styles.chapterLabel, { color: c.textPrimary, fontSize: f.body }]}>Ch. {chapter}</Text>
-            <TouchableOpacity
-              style={[styles.chapterBtn, { backgroundColor: c.primary }, chapter >= (CHAPTER_COUNTS[selectedBook] ?? 999) && { opacity: 0.3 }]}
-              onPress={() => setChapter(ch => ch + 1)}
-              disabled={chapter >= (CHAPTER_COUNTS[selectedBook] ?? 999)}
-            >
+            <TouchableOpacity style={[styles.chapterBtn, { backgroundColor: c.primary }, chapter >= (CHAPTER_COUNTS[selectedBook] ?? 999) && { opacity: 0.3 }]} onPress={() => setChapter(ch => ch + 1)} disabled={chapter >= (CHAPTER_COUNTS[selectedBook] ?? 999)}>
               <Text style={styles.chapterBtnText}>›</Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {searchResults && (
-        <Text style={[styles.resultCount, { color: c.textMuted }]}>
-          {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
-        </Text>
-      )}
+      {searchResults && <Text style={[styles.resultCount, { color: c.textMuted }]}>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"</Text>}
 
-      {loading ? (
-        <ActivityIndicator style={styles.center} size="large" color={c.primary} />
-      ) : (
+      {loading ? <ActivityIndicator style={styles.center} size="large" color={c.primary} /> : (
         <FlatList
           ref={listRef}
           data={displayVerses}
@@ -487,16 +478,30 @@ export default function BibleScreen() {
           ListEmptyComponent={<Text style={[styles.empty, { color: c.textMuted }]}>No verses found.</Text>}
           renderItem={({ item: v }) => {
             const isExpanded = expanded?.verseId === v.id;
+            const ref = verseRef(v);
+            const highlight = highlights[ref];
+            const hasNote = notedRefs.has(ref);
             return (
               <View>
                 <TouchableOpacity
-                  style={[styles.verseRow, { borderBottomColor: isExpanded ? 'transparent' : c.border }, isExpanded && { backgroundColor: theme.dark ? '#1a2a3a' : '#e8f0fe' }]}
+                  style={[
+                    styles.verseRow,
+                    { borderBottomColor: isExpanded ? 'transparent' : c.border },
+                    highlight && { backgroundColor: highlight.color + '38' },
+                    isExpanded && !highlight && { backgroundColor: theme.dark ? '#1a2a3a' : '#e8f0fe' },
+                  ]}
                   onPress={() => toggleVerse(v)}
+                  onLongPress={() => setHighlightTarget(v)}
+                  delayLongPress={400}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.verseNum, { color: c.primary, fontSize: f.label }]}>
-                    {searchResults ? `${v.book} ${v.chapter}:${v.verse}` : v.verse}
-                  </Text>
+                  {highlight && <View style={[styles.highlightBar, { backgroundColor: highlight.color }]} />}
+                  <View style={styles.verseNumCol}>
+                    <Text style={[styles.verseNum, { color: c.primary, fontSize: f.label }]}>
+                      {searchResults ? `${v.book} ${v.chapter}:${v.verse}` : v.verse}
+                    </Text>
+                    {hasNote && <Text style={styles.noteIcon}>📝</Text>}
+                  </View>
                   <Text style={[styles.verseText, { color: c.textPrimary, fontSize: f.verse }]}>{v.text}</Text>
                   <Text style={[styles.verseChevron, { color: c.textMuted }]}>{isExpanded ? '▲' : '▼'}</Text>
                 </TouchableOpacity>
@@ -507,13 +512,30 @@ export default function BibleScreen() {
         />
       )}
 
-      <VerseChooser
-        visible={chooserOpen}
-        selectedBook={selectedBook}
-        chapter={chapter}
-        onNavigate={handleNavigate}
-        onClose={() => setChooserOpen(false)}
-      />
+      {/* Highlight picker modal */}
+      <Modal visible={!!highlightTarget} transparent animationType="fade" onRequestClose={() => setHighlightTarget(null)}>
+        <TouchableOpacity style={styles.hlOverlay} activeOpacity={1} onPress={() => setHighlightTarget(null)}>
+          <View style={[styles.hlSheet, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <Text style={[styles.hlTitle, { color: c.textPrimary }]}>
+              {highlightTarget ? verseRef(highlightTarget) : ''}
+            </Text>
+            <View style={styles.hlColors}>
+              {HIGHLIGHT_COLORS.map(({ color, label }) => (
+                <TouchableOpacity key={color} style={[styles.hlSwatch, { backgroundColor: color }, highlights[highlightTarget ? verseRef(highlightTarget) : '']?.color === color && styles.hlSwatchSelected]} onPress={() => applyHighlight(color)}>
+                  <Text style={styles.hlSwatchLabel}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {highlightTarget && highlights[verseRef(highlightTarget)] && (
+              <TouchableOpacity style={[styles.hlRemove, { borderColor: c.border }]} onPress={removeHighlight}>
+                <Text style={[styles.hlRemoveText, { color: c.textMuted }]}>Remove highlight</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <VerseChooser visible={chooserOpen} selectedBook={selectedBook} chapter={chapter} onNavigate={handleNavigate} onClose={() => setChooserOpen(false)} />
     </View>
   );
 }
@@ -538,8 +560,11 @@ const styles = StyleSheet.create({
   resultCount: { fontSize: 12, paddingHorizontal: 12, paddingVertical: 6 },
   center: { flex: 1 },
   list: { paddingBottom: 40 },
-  verseRow: { flexDirection: 'row', gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, alignItems: 'flex-start' },
-  verseNum: { fontWeight: 'bold', minWidth: 28, marginTop: 2 },
+  verseRow: { flexDirection: 'row', gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, alignItems: 'flex-start', overflow: 'hidden' },
+  highlightBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  verseNumCol: { alignItems: 'center', minWidth: 28 },
+  verseNum: { fontWeight: 'bold', marginTop: 2 },
+  noteIcon: { fontSize: 10, marginTop: 3 },
   verseText: { flex: 1, lineHeight: 24 },
   verseChevron: { fontSize: 10, marginTop: 6 },
   empty: { textAlign: 'center', marginTop: 48 },
@@ -555,4 +580,14 @@ const styles = StyleSheet.create({
   panelSaveBtnText: { color: '#fff', fontWeight: 'bold' },
   panelSowders: { paddingHorizontal: 16 },
   panelSowdersText: { lineHeight: 26 },
+  // Highlight picker
+  hlOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  hlSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderWidth: 1 },
+  hlTitle: { fontSize: 14, fontWeight: '700', marginBottom: 20, textAlign: 'center' },
+  hlColors: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
+  hlSwatch: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 },
+  hlSwatchSelected: { borderWidth: 3, borderColor: '#fff' },
+  hlSwatchLabel: { fontSize: 9, color: '#000', fontWeight: '700' },
+  hlRemove: { borderTopWidth: 1, paddingTop: 16, alignItems: 'center' },
+  hlRemoveText: { fontSize: 14 },
 });
