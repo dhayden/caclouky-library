@@ -1,5 +1,5 @@
 import client from './client';
-import type { Book, BooksResponse, Checkout, Reservation, Member, SermonDoc, IndexStatus, ChatResponse } from '../types';
+import type { Book, BooksResponse, Checkout, Reservation, Member, SermonDoc, IndexStatus, ChatResponse, BibleVerse, SearchHistory, UserHighlight, UserNote } from '../types';
 
 // Auth
 export const login = (email: string, password: string) =>
