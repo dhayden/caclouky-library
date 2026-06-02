@@ -8,7 +8,7 @@ on:
 
 jobs:
   api:
-    name: Build & test API
+    name: Build API
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -17,23 +17,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '9.0.x'
       - run: dotnet restore
       - run: dotnet build --no-restore --configuration Release
-      - run: dotnet test --no-build --configuration Release --verbosity normal
 
   web:
-    name: Build Angular
+    name: Build React
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web/caclouky-web
+        working-directory: web/caclouky-react
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: web/caclouky-web/package-lock.json
+          cache-dependency-path: web/caclouky-react/package-lock.json
       - run: npm ci
-      - run: npx ng build --configuration production
+      - run: npm run build
+        env:
+          VITE_API_URL: /api

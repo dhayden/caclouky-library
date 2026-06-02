@@ -72,7 +72,9 @@ jobs:
             export Jwt__Key='${{ secrets.JWT_KEY }}'
             export Jwt__Issuer='http://212.56.44.143'
             export Jwt__Audience='http://212.56.44.143'
-            export Gemini__ApiKey='${{ secrets.GEMINI_API_KEY }}'
+            export Ollama__BaseUrl='http://localhost:11434'
+            export Ollama__Model='nomic-embed-text'
+            export Ollama__ChatModel='llama3.2'
             export ASPNETCORE_URLS='http://0.0.0.0:8080'
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
