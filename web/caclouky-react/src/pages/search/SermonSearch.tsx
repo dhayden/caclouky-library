@@ -39,7 +39,7 @@ export default function SermonSearch() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [scripture, setScripture] = useState<{ ref: ScriptureRef; verses: BibleVerse[] } | null>(null);
-  const [highlights, setHighlights] = useState<UserHighlight[]>([]);
+  const [, setHighlights] = useState<UserHighlight[]>([]);
   const [highlightPicker, setHighlightPicker] = useState<{ msgIndex: number; text: string } | null>(null);
   const [msgHighlights, setMsgHighlights] = useState<Record<number, string>>({}); // msgIndex → color
   const [noteDialog, setNoteDialog] = useState<{ text: string } | null>(null);
