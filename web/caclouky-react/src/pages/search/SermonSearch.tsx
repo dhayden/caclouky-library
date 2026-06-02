@@ -116,18 +116,6 @@ export default function SermonSearch() {
     setNoteDialog(null);
   };
 
-  const applyHighlightToText = (text: string) => {
-    let result = text;
-    for (const h of highlights) {
-      if (h.selectedText && result.includes(h.selectedText)) {
-        result = result.replace(
-          h.selectedText,
-          `<mark style="background:${h.color};border-radius:2px;padding:1px 2px">${h.selectedText}</mark>`
-        );
-      }
-    }
-    return result;
-  };
 
   return (
     <Box display="flex" flexDirection="column" height="calc(100vh - 64px)">

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogTitle, Divider, FormControl, IconButton, InputLabel, Link, MenuItem,
-  Paper, Select, TextField, Tooltip, Typography,
+  Select, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { Search, NoteAdd, History, Delete, Close, Bookmark } from '@mui/icons-material';
 import type { BibleVerse, SearchHistory, UserHighlight } from '../../types';

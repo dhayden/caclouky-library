@@ -43,7 +43,7 @@ export const getSermonDocs = () => client.get<SermonDoc[]>('/sermon-docs');
 export const uploadSermonDoc = (file: File) => {
   const form = new FormData();
   form.append('file', file);
-  return client.post<SermonDoc>('/sermon-docs/upload', form);
+  return client.post<{ message: string; queued: number }>('/sermon-docs/upload', form);
 };
 export const reindexSermonDoc = (id: number) => client.post(`/sermon-docs/${id}/reindex`, {});
 export const deleteSermonDoc = (id: number) => client.delete(`/sermon-docs/${id}`);
