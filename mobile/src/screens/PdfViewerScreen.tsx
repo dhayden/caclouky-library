@@ -6,8 +6,34 @@ import * as api from '../api';
 
 type Props = NativeStackScreenProps<SermonStackParamList, 'PdfViewer'>;
 
+function HighlightedText({ text, highlight }: { text: string; highlight?: string }) {
+  if (!highlight || highlight.length < 10) {
+    return <Text style={styles.text}>{text || 'No text available for this page.'}</Text>;
+  }
+
+  // Find the first ~60-char window of the snippet that appears in the page text
+  const needle = highlight.slice(0, 80).replace(/…$/, '').trim();
+  const idx = text.indexOf(needle);
+
+  if (idx === -1) {
+    return <Text style={styles.text}>{text || 'No text available for this page.'}</Text>;
+  }
+
+  const before = text.slice(0, idx);
+  const match  = text.slice(idx, idx + needle.length);
+  const after  = text.slice(idx + needle.length);
+
+  return (
+    <Text style={styles.text}>
+      {before}
+      <Text style={styles.highlight}>{match}</Text>
+      {after}
+    </Text>
+  );
+}
+
 export default function PdfViewerScreen({ route, navigation }: Props) {
-  const { fileName, page } = route.params;
+  const { fileName, page, highlight } = route.params;
   const [text, setText] = useState('');
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(page);
@@ -34,7 +60,7 @@ export default function PdfViewerScreen({ route, navigation }: Props) {
         <ActivityIndicator style={styles.center} size="large" color="#1976d2" />
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-          <Text style={styles.text}>{text || 'No text available for this page.'}</Text>
+          <HighlightedText text={text} highlight={highlight} />
         </ScrollView>
       )}
 
@@ -60,14 +86,15 @@ export default function PdfViewerScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#F7F6F2' },
   center: { flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20 },
-  text: { fontSize: 15, lineHeight: 24, color: '#212121' },
-  nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fafafa' },
-  navBtn: { backgroundColor: '#1976d2', borderRadius: 6, paddingVertical: 8, paddingHorizontal: 18 },
-  navBtnDisabled: { backgroundColor: '#ccc' },
+  content: { padding: 22, paddingBottom: 32 },
+  text: { fontSize: 15, lineHeight: 26, color: '#1A1A2E', fontFamily: 'Georgia' },
+  highlight: { backgroundColor: '#FFE066', color: '#1A1A2E', fontSize: 15, lineHeight: 26 },
+  nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E8E6E0', backgroundColor: '#FFFFFF' },
+  navBtn: { backgroundColor: '#2C52A0', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 20 },
+  navBtnDisabled: { backgroundColor: '#C0BFB8' },
   navBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  pageIndicator: { fontSize: 13, color: '#666' },
+  pageIndicator: { fontSize: 13, color: '#A0A0B4', fontWeight: '500' },
 });

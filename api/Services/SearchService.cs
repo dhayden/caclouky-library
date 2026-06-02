@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CacloukyLibrary.Services;
 
-public record Citation(string DocumentTitle, string FileName, int PageNumber);
+public record Citation(string DocumentTitle, string FileName, int PageNumber, string Snippet);
 public record ScriptureRef(string Reference, string Book, int Chapter, int VerseStart, int VerseEnd);
 public record SearchResult(string Answer, IReadOnlyList<Citation> Citations, IReadOnlyList<ScriptureRef> Scriptures);
 
@@ -120,9 +120,10 @@ public partial class SearchService
 
         var answer = await _ollama.GetAnswerAsync(question, contextChunks);
 
-        // 5. Deduplicate citations
+        // 5. Deduplicate citations (include snippet for viewer highlighting)
         var citations = scored
-            .Select(c => new Citation(c.DocumentTitle, c.FileName, c.PageNumber))
+            .Select(c => new Citation(c.DocumentTitle, c.FileName, c.PageNumber,
+                c.Content.Length > 400 ? c.Content[..400] + "…" : c.Content))
             .DistinctBy(c => (c.DocumentTitle, c.PageNumber))
             .ToList();
 

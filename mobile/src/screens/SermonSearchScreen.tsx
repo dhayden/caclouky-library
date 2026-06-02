@@ -1,11 +1,11 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { SermonStackParamList } from '../navigation/types';
-import type { Citation, ScriptureRef, SearchHistory, BibleVerse } from '../types';
+import type { Citation, TextSearchResult, ScriptureRef, SearchHistory, BibleVerse } from '../types';
 import * as api from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,6 +13,7 @@ const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD']
 const HIGHLIGHT_LABELS = ['Yellow', 'Green', 'Blue', 'Pink', 'Purple'];
 
 type Props = NativeStackScreenProps<SermonStackParamList, 'SermonSearch'>;
+type SearchMode = 'ai' | 'text';
 
 interface Message {
   role: 'user' | 'ai';
@@ -30,7 +31,9 @@ const SUGGESTIONS = [
 
 export default function SermonSearchScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const [mode, setMode] = useState<SearchMode>('ai');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [textResults, setTextResults] = useState<TextSearchResult[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -39,7 +42,13 @@ export default function SermonSearchScreen({ navigation }: Props) {
   const [highlightPicker, setHighlightPicker] = useState<{ text: string } | null>(null);
   const [noteModal, setNoteModal] = useState<{ prefill: string } | null>(null);
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
+  const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
 
   const loadHistory = useCallback(async () => {
     if (!user) return;
@@ -49,7 +58,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  const send = async (question: string) => {
+  const sendAi = async (question: string) => {
     if (!question.trim() || loading) return;
     setMessages(m => [...m, { role: 'user', text: question }]);
     setInput('');
@@ -71,6 +80,24 @@ export default function SermonSearchScreen({ navigation }: Props) {
     }
   };
 
+  const sendText = async (query: string) => {
+    if (!query.trim() || loading) return;
+    setInput('');
+    setLoading(true);
+    if (user) api.saveSearchHistory(query, 'sermon').then(loadHistory);
+    try {
+      const res = await api.textSearch(query);
+      setTextResults(res.data.results);
+    } catch {
+      setTextResults([]);
+      showToast('Search failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const send = (q: string) => mode === 'ai' ? sendAi(q) : sendText(q);
+
   const openScripture = async (ref: ScriptureRef) => {
     try {
       const res = await api.getBibleVerses(ref.book, ref.chapter, ref.verseStart, ref.verseEnd);
@@ -81,91 +108,140 @@ export default function SermonSearchScreen({ navigation }: Props) {
   };
 
   const deleteHistory = (id: number) => {
-    Alert.alert('Remove', 'Remove this search from history?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { await api.deleteSearchHistory(id); loadHistory(); } },
-    ]);
+    api.deleteSearchHistory(id).then(loadHistory);
+  };
+
+  const switchMode = (m: SearchMode) => {
+    setMode(m);
+    setMessages([]);
+    setTextResults([]);
+    setInput('');
   };
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
 
-      {/* History button */}
-      {user && (
-        <TouchableOpacity style={styles.historyBtn} onPress={() => { setHistoryOpen(true); loadHistory(); }}>
-          <Text style={styles.historyBtnText}>⏱ History</Text>
+      {/* Mode toggle */}
+      <View style={styles.modeRow}>
+        <TouchableOpacity style={[styles.modeBtn, mode === 'ai' && styles.modeBtnActive]} onPress={() => switchMode('ai')}>
+          <Text style={[styles.modeBtnText, mode === 'ai' && styles.modeBtnTextActive]}>🤖 AI Search</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.modeBtn, mode === 'text' && styles.modeBtnActive]} onPress={() => switchMode('text')}>
+          <Text style={[styles.modeBtnText, mode === 'text' && styles.modeBtnTextActive]}>🔍 Text Search</Text>
+        </TouchableOpacity>
+        {user && (
+          <TouchableOpacity style={styles.historyBtn} onPress={() => { setHistoryOpen(true); loadHistory(); }}>
+            <Text style={styles.historyBtnText}>⏱</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Toast */}
+      {toast && (
+        <View style={styles.toastBar}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
       )}
 
-      <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.messagesContent}>
-        {messages.length === 0 && (
-          <View style={styles.suggestions}>
-            <Text style={styles.suggestionsLabel}>Suggested questions:</Text>
-            {SUGGESTIONS.map(s => (
-              <TouchableOpacity key={s} style={styles.suggestion} onPress={() => send(s)}>
-                <Text style={styles.suggestionText}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        {messages.map((msg, i) => (
-          <View key={i} style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAi]}>
-            {msg.role === 'ai' && <Text style={styles.aiLabel}>AI Answer</Text>}
-            <Text style={[styles.bubbleText, msg.role === 'user' && styles.bubbleTextUser, msg.error && styles.bubbleError]}>
-              {msg.text}
-            </Text>
-
-            {/* Highlight + Note buttons */}
-            {user && !msg.error && (
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.actionBtn} onPress={() => setHighlightPicker({ text: msg.text.slice(0, 500) })}>
-                  <Text style={styles.actionBtnText}>🖊 Highlight</Text>
+      {/* AI mode: chat bubbles */}
+      {mode === 'ai' && (
+        <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.messagesContent}>
+          {messages.length === 0 && (
+            <View style={styles.suggestions}>
+              <Text style={styles.suggestionsLabel}>Suggested questions:</Text>
+              {SUGGESTIONS.map(s => (
+                <TouchableOpacity key={s} style={styles.suggestion} onPress={() => sendAi(s)}>
+                  <Text style={styles.suggestionText}>{s}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionBtn} onPress={() => { setNoteForm({ title: 'Sermon Note', content: msg.text.slice(0, 300) }); setNoteModal({ prefill: msg.text }); }}>
-                  <Text style={styles.actionBtnText}>📝 Add Note</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+              ))}
+            </View>
+          )}
+          {messages.map((msg, i) => (
+            <View key={i} style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAi]}>
+              {msg.role === 'ai' && <Text style={styles.aiLabel}>AI Answer</Text>}
+              <Text style={[styles.bubbleText, msg.role === 'user' && styles.bubbleTextUser, msg.error && styles.bubbleError]}>
+                {msg.text}
+              </Text>
 
-            {/* Sermon citations */}
-            {msg.citations && msg.citations.length > 0 && (
-              <View style={styles.citationsBox}>
-                <Text style={styles.citationsLabel}>Sources:</Text>
-                {msg.citations.map((c, j) => (
-                  <TouchableOpacity key={j} onPress={() => navigation.navigate('PdfViewer', { fileName: c.fileName, page: c.pageNumber, title: `${c.documentTitle} p.${c.pageNumber}` })}>
-                    <Text style={styles.citationLink}>{c.documentTitle} — p.{c.pageNumber}</Text>
+              {user && !msg.error && (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => setHighlightPicker({ text: msg.text.slice(0, 500) })}>
+                    <Text style={styles.actionBtnText}>🖊 Highlight</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            )}
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => { setNoteForm({ title: 'Sermon Note', content: msg.text.slice(0, 300) }); setNoteModal({ prefill: msg.text }); }}>
+                    <Text style={styles.actionBtnText}>📝 Add Note</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
-            {/* Scripture references */}
-            {msg.scriptures && msg.scriptures.length > 0 && (
-              <View style={styles.scripturesBox}>
-                <Text style={styles.citationsLabel}>📖 Scriptures:</Text>
-                <View style={styles.scriptureChips}>
-                  {msg.scriptures.map((s, j) => (
-                    <TouchableOpacity key={j} style={styles.scriptureChip} onPress={() => openScripture(s)}>
-                      <Text style={styles.scriptureChipText}>{s.reference}</Text>
+              {msg.citations && msg.citations.length > 0 && (
+                <View style={styles.citationsBox}>
+                  <Text style={styles.citationsLabel}>Sources:</Text>
+                  {msg.citations.map((c, j) => (
+                    <TouchableOpacity key={j} onPress={() => navigation.navigate('PdfViewer', {
+                      fileName: c.fileName, page: c.pageNumber,
+                      title: `${c.documentTitle} p.${c.pageNumber}`,
+                      highlight: c.snippet,
+                    })}>
+                      <Text style={styles.citationLink}>{c.documentTitle} — p.{c.pageNumber}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-              </View>
-            )}
-          </View>
-        ))}
-        {loading && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#1976d2" />
-            <Text style={styles.loadingText}>Searching sermons…</Text>
-          </View>
-        )}
-      </ScrollView>
+              )}
+
+              {msg.scriptures && msg.scriptures.length > 0 && (
+                <View style={styles.scripturesBox}>
+                  <Text style={styles.citationsLabel}>📖 Scriptures:</Text>
+                  <View style={styles.scriptureChips}>
+                    {msg.scriptures.map((s, j) => (
+                      <TouchableOpacity key={j} style={styles.scriptureChip} onPress={() => openScripture(s)}>
+                        <Text style={styles.scriptureChipText}>{s.reference}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          ))}
+          {loading && (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color="#1976d2" />
+              <Text style={styles.loadingText}>Searching sermons…</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+
+      {/* Text mode: results list */}
+      {mode === 'text' && (
+        <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
+          {!loading && textResults.length === 0 && (
+            <Text style={styles.suggestionsLabel}>Enter keywords to search sermon text directly.</Text>
+          )}
+          {loading && (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color="#1976d2" />
+              <Text style={styles.loadingText}>Searching…</Text>
+            </View>
+          )}
+          {textResults.map((r, i) => (
+            <TouchableOpacity key={i} style={styles.textResult}
+              onPress={() => navigation.navigate('PdfViewer', {
+                fileName: r.fileName, page: r.pageNumber,
+                title: `${r.documentTitle} p.${r.pageNumber}`,
+                highlight: r.snippet,
+              })}>
+              <Text style={styles.textResultTitle}>{r.documentTitle} — p.{r.pageNumber}</Text>
+              <Text style={styles.textResultSnippet} numberOfLines={3}>{r.snippet}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="Ask a question about the sermons…"
+          placeholder={mode === 'ai' ? 'Ask a question about the sermons…' : 'Search sermon text…'}
           value={input} onChangeText={setInput}
           multiline returnKeyType="send"
           onSubmitEditing={() => send(input)}
@@ -223,11 +299,15 @@ export default function SermonSearchScreen({ navigation }: Props) {
                   key={color}
                   style={[styles.colorSwatch, { backgroundColor: color }]}
                   onPress={async () => {
-                    if (highlightPicker?.text) {
-                      await api.createHighlight('sermon', 'search', highlightPicker.text, color);
+                    try {
+                      if (highlightPicker?.text)
+                        await api.createHighlight('sermon', 'search', highlightPicker.text, color);
+                      showToast('Highlight saved.');
+                    } catch {
+                      showToast('Could not save highlight.');
+                    } finally {
+                      setHighlightPicker(null);
                     }
-                    setHighlightPicker(null);
-                    Alert.alert('Saved', 'Highlight saved.');
                   }}
                 >
                   <Text style={styles.colorLabel}>{HIGHLIGHT_LABELS[i]}</Text>
@@ -258,9 +338,14 @@ export default function SermonSearchScreen({ navigation }: Props) {
             style={[styles.saveNoteBtn, (!noteForm.title || !noteForm.content) && styles.sendBtnDisabled]}
             disabled={!noteForm.title || !noteForm.content}
             onPress={async () => {
-              await api.createNote({ title: noteForm.title, content: noteForm.content, sourceType: 'sermon' });
-              setNoteModal(null);
-              Alert.alert('Saved', 'Note saved.');
+              try {
+                await api.createNote({ title: noteForm.title, content: noteForm.content, sourceType: 'sermon' });
+                showToast('Note saved.');
+              } catch {
+                showToast('Could not save note.');
+              } finally {
+                setNoteModal(null);
+              }
             }}
           >
             <Text style={styles.closeScriptureBtnText}>Save Note</Text>
@@ -294,66 +379,83 @@ export default function SermonSearchScreen({ navigation }: Props) {
   );
 }
 
+const P = '#2C52A0';   // primary navy
+const BG = '#F7F6F2';  // warm background
+const SRF = '#FFFFFF'; // surface
+const BRD = '#E8E6E0'; // border
+const TXT = '#1A1A2E'; // text primary
+const MUT = '#A0A0B4'; // muted
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  historyBtn: { alignSelf: 'flex-end', margin: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f0f4ff', borderRadius: 14 },
-  historyBtnText: { fontSize: 12, color: '#1976d2' },
+  container: { flex: 1, backgroundColor: BG },
+  modeRow: { flexDirection: 'row', padding: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: BRD, backgroundColor: SRF, alignItems: 'center' },
+  modeBtn: { flex: 1, paddingVertical: 8, borderRadius: 22, borderWidth: 1.5, borderColor: BRD, alignItems: 'center', backgroundColor: BG },
+  modeBtnActive: { backgroundColor: P, borderColor: P },
+  modeBtnText: { fontSize: 13, color: '#5A5A72', fontWeight: '600' },
+  modeBtnTextActive: { color: '#fff' },
+  historyBtn: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: BG, borderRadius: 14, borderWidth: 1, borderColor: BRD },
+  historyBtnText: { fontSize: 16, color: P },
+  toastBar: { backgroundColor: '#1A1A2E', marginHorizontal: 16, marginTop: 8, borderRadius: 10, padding: 11, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+  toastText: { color: '#fff', fontSize: 13, fontWeight: '500' },
   messages: { flex: 1 },
-  messagesContent: { padding: 16, paddingBottom: 8 },
-  suggestions: { paddingVertical: 8 },
-  suggestionsLabel: { fontSize: 13, color: '#888', marginBottom: 8 },
-  suggestion: { backgroundColor: '#f0f4ff', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 8, alignSelf: 'flex-start' },
-  suggestionText: { fontSize: 13, color: '#1976d2' },
-  bubble: { marginBottom: 12, maxWidth: '85%' },
-  bubbleUser: { alignSelf: 'flex-end', backgroundColor: '#1976d2', borderRadius: 16, borderBottomRightRadius: 4, padding: 12 },
-  bubbleAi: { alignSelf: 'flex-start', backgroundColor: '#f5f5f5', borderRadius: 16, borderBottomLeftRadius: 4, padding: 12, borderWidth: 1, borderColor: '#e0e0e0' },
-  aiLabel: { fontSize: 11, color: '#888', marginBottom: 4 },
-  bubbleText: { fontSize: 14, color: '#212121', lineHeight: 20 },
+  messagesContent: { padding: 18, paddingBottom: 12 },
+  suggestions: { paddingVertical: 12 },
+  suggestionsLabel: { fontSize: 12, color: MUT, marginBottom: 10, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
+  suggestion: { backgroundColor: SRF, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: BRD, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  suggestionText: { fontSize: 13, color: P, fontWeight: '500' },
+  bubble: { marginBottom: 14, maxWidth: '86%' },
+  bubbleUser: { alignSelf: 'flex-end', backgroundColor: P, borderRadius: 18, borderBottomRightRadius: 4, padding: 13 },
+  bubbleAi: { alignSelf: 'flex-start', backgroundColor: SRF, borderRadius: 18, borderBottomLeftRadius: 4, padding: 13, borderWidth: 1, borderColor: BRD, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
+  aiLabel: { fontSize: 10, color: MUT, marginBottom: 5, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  bubbleText: { fontSize: 14, color: TXT, lineHeight: 22 },
   bubbleTextUser: { color: '#fff' },
-  bubbleError: { color: '#d32f2f' },
-  citationsBox: { marginTop: 8, borderTopWidth: 1, borderTopColor: '#e0e0e0', paddingTop: 6 },
-  citationsLabel: { fontSize: 11, fontWeight: '700', color: '#888', marginBottom: 4 },
-  citationLink: { fontSize: 12, color: '#1976d2', textDecorationLine: 'underline', marginBottom: 3 },
-  scripturesBox: { marginTop: 8, borderTopWidth: 1, borderTopColor: '#e0e0e0', paddingTop: 6 },
-  scriptureChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
-  scriptureChip: { backgroundColor: '#e3f2fd', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: '#90caf9' },
-  scriptureChipText: { fontSize: 11, color: '#1565c0' },
+  bubbleError: { color: '#C0392B' },
+  citationsBox: { marginTop: 10, borderTopWidth: 1, borderTopColor: BRD, paddingTop: 8 },
+  citationsLabel: { fontSize: 10, fontWeight: '700', color: MUT, marginBottom: 5, letterSpacing: 0.5, textTransform: 'uppercase' },
+  citationLink: { fontSize: 12, color: P, textDecorationLine: 'underline', marginBottom: 4, fontWeight: '500' },
+  scripturesBox: { marginTop: 10, borderTopWidth: 1, borderTopColor: BRD, paddingTop: 8 },
+  scriptureChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  scriptureChip: { backgroundColor: '#EEF2FB', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#C8D4F0' },
+  scriptureChipText: { fontSize: 11, color: P, fontWeight: '600' },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 4 },
-  actionBtn: { backgroundColor: '#e3f2fd', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#90caf9' },
-  actionBtnText: { fontSize: 12, color: '#1565c0', fontWeight: '600' },
-  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 12 },
-  colorSwatch: { width: 70, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  colorLabel: { fontSize: 11, fontWeight: '600', color: '#333' },
-  noteLabel: { fontSize: 13, color: '#666', marginTop: 12, marginBottom: 4 },
-  noteInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 15 },
+  actionBtn: { backgroundColor: '#EEF2FB', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#C8D4F0' },
+  actionBtnText: { fontSize: 12, color: P, fontWeight: '600' },
+  textResult: { backgroundColor: SRF, borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: BRD, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
+  textResultTitle: { fontSize: 13, fontWeight: '700', color: P, marginBottom: 6 },
+  textResultSnippet: { fontSize: 13, color: '#5A5A72', lineHeight: 20 },
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 12 },
+  colorSwatch: { width: 68, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  colorLabel: { fontSize: 11, fontWeight: '700', color: '#333' },
+  noteLabel: { fontSize: 12, color: '#5A5A72', marginTop: 14, marginBottom: 5, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  noteInput: { borderWidth: 1, borderColor: BRD, borderRadius: 10, padding: 12, fontSize: 15, backgroundColor: BG },
   noteInputMulti: { minHeight: 140, textAlignVertical: 'top' },
-  saveNoteBtn: { marginTop: 20, backgroundColor: '#1976d2', borderRadius: 8, padding: 14, alignItems: 'center' },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  loadingText: { fontSize: 13, color: '#888' },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff' },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 14, maxHeight: 100, marginRight: 8 },
-  sendBtn: { backgroundColor: '#1976d2', width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  sendBtnDisabled: { backgroundColor: '#bbb' },
+  saveNoteBtn: { marginTop: 20, backgroundColor: P, borderRadius: 10, padding: 15, alignItems: 'center' },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  loadingText: { fontSize: 13, color: MUT },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, borderTopWidth: 1, borderTopColor: BRD, backgroundColor: SRF },
+  input: { flex: 1, borderWidth: 1.5, borderColor: BRD, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 9, fontSize: 14, maxHeight: 100, marginRight: 8, backgroundColor: BG, color: TXT },
+  sendBtn: { backgroundColor: P, width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  sendBtnDisabled: { backgroundColor: '#C0BFB8' },
   sendIcon: { color: '#fff', fontSize: 16 },
-  modal: { flex: 1, backgroundColor: '#fff', padding: 16 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
-  modalHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  clearBtn: { fontSize: 13, color: '#d32f2f' },
-  closeBtn: { fontSize: 20, color: '#888' },
-  historyItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  modal: { flex: 1, backgroundColor: SRF, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: TXT },
+  modalHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  clearBtn: { fontSize: 13, color: '#C0392B', fontWeight: '600' },
+  closeBtn: { fontSize: 22, color: MUT },
+  historyItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BRD },
   historyItemText: { flex: 1 },
-  historyQuery: { fontSize: 14, color: '#212121' },
-  historyDate: { fontSize: 12, color: '#aaa' },
-  deleteBtn: { fontSize: 16, paddingHorizontal: 8 },
-  emptyText: { color: '#999', textAlign: 'center', marginTop: 24 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  scriptureModal: { backgroundColor: '#fff', borderRadius: 12, padding: 20, width: '100%', maxHeight: '70%' },
-  scriptureTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: '#1976d2' },
+  historyQuery: { fontSize: 14, color: TXT, fontWeight: '500' },
+  historyDate: { fontSize: 12, color: MUT, marginTop: 2 },
+  deleteBtn: { fontSize: 16, paddingHorizontal: 8, color: MUT },
+  emptyText: { color: MUT, textAlign: 'center', marginTop: 32, fontSize: 14 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  scriptureModal: { backgroundColor: SRF, borderRadius: 16, padding: 22, width: '100%', maxHeight: '72%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 },
+  scriptureTitle: { fontSize: 19, fontWeight: '700', marginBottom: 14, color: P },
   scriptureScroll: { maxHeight: 300 },
-  verseRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  verseNum: { fontSize: 12, fontWeight: 'bold', color: '#1976d2', minWidth: 20, marginTop: 2 },
-  verseText: { fontSize: 15, color: '#212121', lineHeight: 22, flex: 1 },
-  closeScriptureBtn: { marginTop: 16, backgroundColor: '#1976d2', borderRadius: 8, padding: 12, alignItems: 'center' },
-  closeScriptureBtnText: { color: '#fff', fontWeight: '600' },
+  verseRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  verseNum: { fontSize: 12, fontWeight: '700', color: P, minWidth: 22, marginTop: 3 },
+  verseText: { fontSize: 15, color: TXT, lineHeight: 24, flex: 1 },
+  closeScriptureBtn: { marginTop: 18, backgroundColor: P, borderRadius: 10, padding: 13, alignItems: 'center' },
+  closeScriptureBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });

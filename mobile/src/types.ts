@@ -64,6 +64,14 @@ export interface Citation {
   documentTitle: string;
   fileName: string;
   pageNumber: number;
+  snippet: string;
+}
+
+export interface TextSearchResult {
+  documentTitle: string;
+  fileName: string;
+  pageNumber: number;
+  snippet: string;
 }
 
 export interface ScriptureRef {

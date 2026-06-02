@@ -29,25 +29,25 @@ function buildTheme(dark: boolean, fontSize: FontSize): Theme {
   return {
     dark,
     colors: dark ? {
-      background:    '#121212',
-      surface:       '#1e1e1e',
-      border:        '#333',
-      textPrimary:   '#f0f0f0',
-      textSecondary: '#bbb',
-      textMuted:     '#777',
-      primary:       '#90caf9',
-      inputBg:       '#2a2a2a',
+      background:    '#0F0F14',
+      surface:       '#1A1A24',
+      border:        '#2A2A38',
+      textPrimary:   '#EEEEf4',
+      textSecondary: '#9999B0',
+      textMuted:     '#55556A',
+      primary:       '#7B9FE0',
+      inputBg:       '#22222E',
       cardShadow:    'transparent',
     } : {
-      background:    '#f5f5f5',
-      surface:       '#ffffff',
-      border:        '#e0e0e0',
-      textPrimary:   '#212121',
-      textSecondary: '#555',
-      textMuted:     '#aaa',
-      primary:       '#1976d2',
-      inputBg:       '#fafafa',
-      cardShadow:    '#000',
+      background:    '#F7F6F2',   // warm parchment white
+      surface:       '#FFFFFF',
+      border:        '#E8E6E0',
+      textPrimary:   '#1A1A2E',   // deep ink
+      textSecondary: '#5A5A72',
+      textMuted:     '#A0A0B4',
+      primary:       '#2C52A0',   // refined navy blue
+      inputBg:       '#F0EFE9',
+      cardShadow:    '#00000010',
     },
     font: FONT_SCALE[fontSize],
   };

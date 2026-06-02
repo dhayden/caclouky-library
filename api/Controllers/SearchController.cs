@@ -37,14 +37,53 @@ public class SearchController : ControllerBase
 
         return Ok(new ChatResponse(
             result.Answer,
-            result.Citations.Select(c => new CitationDto(c.DocumentTitle, c.FileName, c.PageNumber)).ToList(),
+            result.Citations.Select(c => new CitationDto(c.DocumentTitle, c.FileName, c.PageNumber, c.Snippet)).ToList(),
             result.Scriptures.Select(s => new ScriptureRefDto(s.Reference, s.Book, s.Chapter, s.VerseStart, s.VerseEnd)).ToList()
         ));
     }
 
+    // POST /api/search/text
+    [AllowAnonymous]
+    [HttpPost("text")]
+    public async Task<IActionResult> TextSearch([FromBody] TextSearchRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Query) || request.Query.Length < 3)
+            return BadRequest("Query must be at least 3 characters.");
+
+        var terms = request.Query
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(t => t.Length > 2)
+            .ToArray();
+
+        if (terms.Length == 0) return BadRequest("No searchable terms.");
+
+        var query = _db.PdfChunks
+            .Include(c => c.Document)
+            .Where(c => c.Document.IsIndexed);
+
+        foreach (var term in terms)
+        {
+            var t = term;
+            query = query.Where(c => EF.Functions.Like(c.Content, $"%{t}%"));
+        }
+
+        var results = await query
+            .OrderBy(c => c.Document.Title).ThenBy(c => c.PageNumber)
+            .Take(20)
+            .Select(c => new TextSearchResultDto(
+                c.Document.Title,
+                c.Document.FileName,
+                c.PageNumber,
+                c.Content.Length > 400 ? c.Content.Substring(0, 400) + "…" : c.Content
+            ))
+            .ToListAsync();
+
+        return Ok(new { results });
+    }
+
     // GET /api/search/scripture-teaching?book=John&chapter=3&verse=16
     // Returns permanently stored teaching; generates and stores it if not yet available.
-    [Authorize(Policy = "AnyRole")]
+    [AllowAnonymous]
     [HttpGet("scripture-teaching")]
     public async Task<IActionResult> GetScriptureTeaching([FromQuery] string book, [FromQuery] int chapter, [FromQuery] int verse)
     {

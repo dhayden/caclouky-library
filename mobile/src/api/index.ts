@@ -1,5 +1,5 @@
 import client from './client';
-import type { Book, BooksResponse, Checkout, Reservation, Member, AuthUser, ChatResponse, NoteFolder } from '../types';
+import type { Book, BooksResponse, Checkout, Reservation, Member, AuthUser, ChatResponse, TextSearchResult, NoteFolder, UserNote, UserHighlight, BibleVerse, SearchHistory } from '../types';
 
 export const login = (email: string, password: string) =>
   client.post<{ token: string; user: AuthUser }>('/auth/login', { email, password });
@@ -31,6 +31,9 @@ export const deactivateMember = (id: string) => client.put(`/members/${id}/deact
 
 export const chatSearch = (question: string) =>
   client.post<ChatResponse>('/search/chat', { question });
+
+export const textSearch = (query: string) =>
+  client.post<{ results: TextSearchResult[] }>('/search/text', { query });
 
 export const getScriptureTeaching = (book: string, chapter: number, verse: number) =>
   client.get<{ reference: string; teaching: string; generatedAt: string; fromStore: boolean }>(

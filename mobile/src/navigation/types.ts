@@ -5,7 +5,7 @@ export type CatalogStackParamList = {
 
 export type SermonStackParamList = {
   SermonSearch: undefined;
-  PdfViewer: { fileName: string; page: number; title: string };
+  PdfViewer: { fileName: string; page: number; title: string; highlight?: string };
 };
 
 export type AdminStackParamList = {
