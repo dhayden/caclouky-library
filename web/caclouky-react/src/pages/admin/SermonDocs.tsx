@@ -39,8 +39,8 @@ export default function SermonDocs() {
     setUploading(true);
     try {
       const res = await api.uploadSermonDoc(file);
-      setToast({ msg: `${res.data.title} uploaded and indexed.`, severity: 'success' });
-      loadDocs();
+      if (res.data.queued > 0) startPolling();
+      else { setToast({ msg: res.data.message, severity: 'success' }); loadDocs(); }
     } catch {
       setToast({ msg: 'Upload failed.', severity: 'error' });
     } finally {
@@ -77,11 +77,11 @@ export default function SermonDocs() {
   return (
     <Box p={3}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-        <Typography variant="h5">Sermon PDF Management</Typography>
+        <Typography variant="h5">Sermon Document Management</Typography>
         <Box display="flex" gap={1}>
-          <input ref={fileRef} type="file" accept=".pdf" hidden onChange={upload} />
+          <input ref={fileRef} type="file" accept=".pdf,.html" hidden onChange={upload} />
           <Button variant="outlined" startIcon={<Upload />} onClick={() => fileRef.current?.click()} disabled={busy}>
-            Upload PDF
+            Upload PDF / HTML
           </Button>
           <Button variant="outlined" color="secondary" onClick={indexAll} disabled={busy}>
             Index All
@@ -89,7 +89,7 @@ export default function SermonDocs() {
         </Box>
       </Box>
       <Typography variant="body2" color="text.secondary" mb={2}>
-        Upload PDFs individually, or drop files into the sermon-pdfs folder on the server and click Index All.
+        Upload PDF or HTML files individually, or drop files into the sermon-pdfs folder on the server and click Index All.
       </Typography>
 
       {uploading && (
@@ -102,7 +102,7 @@ export default function SermonDocs() {
       {indexStatus?.isRunning && (
         <Box mb={2}>
           <Typography variant="body2" mb={0.5}>
-            Indexing {indexStatus.completed} of {indexStatus.total} PDFs… {indexStatus.currentFile}
+            Indexing {indexStatus.completed} of {indexStatus.total} files… {indexStatus.currentFile}
           </Typography>
           <LinearProgress variant="determinate" value={indexStatus.total ? (indexStatus.completed / indexStatus.total) * 100 : 0} />
           {indexStatus.failed > 0 && <Typography variant="caption" color="error">{indexStatus.failed} failed</Typography>}

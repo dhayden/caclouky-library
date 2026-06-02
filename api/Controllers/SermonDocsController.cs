@@ -47,12 +47,33 @@ public class SermonDocsController : ControllerBase
     [RequestSizeLimit(100_000_000)]
     public async Task<IActionResult> Upload(IFormFile file)
     {
-        if (file == null || Path.GetExtension(file.FileName).ToLower() != ".pdf")
-            return BadRequest("A PDF file is required.");
+        var ext = Path.GetExtension(file?.FileName ?? "").ToLowerInvariant();
+        if (file == null || (ext != ".pdf" && ext != ".html"))
+            return BadRequest("A PDF or HTML file is required.");
 
-        var doc = await _indexer.SaveAndIndexAsync(file);
-        var dto = new SermonDocDto(doc.Id, doc.Title, doc.FileName, doc.PageCount, doc.UploadedAt, doc.IsIndexed, doc.IndexedAt);
-        return Ok(dto);
+        // Save file to disk, then hand off to the background worker
+        var fileName = Path.GetFileName(file.FileName);
+        var filePath = Path.Combine(_indexer.StoragePath, fileName);
+        if (!System.IO.File.Exists(filePath))
+        {
+            await using var stream = new FileStream(filePath, FileMode.Create);
+            await file.CopyToAsync(stream);
+        }
+
+        if (_status.IsRunning)
+            _status.Total++;
+        else
+        {
+            _status.IsRunning = true;
+            _status.Total     = 1;
+            _status.Completed = 0;
+            _status.Failed    = 0;
+            _status.StartedAt = DateTime.UtcNow;
+            _status.Errors    = [];
+        }
+
+        await _queue.Writer.WriteAsync(filePath);
+        return Ok(new { message = $"{fileName} queued for indexing.", queued = 1 });
     }
 
     // POST /api/sermon-docs/5/reindex
@@ -73,7 +94,9 @@ public class SermonDocsController : ControllerBase
         if (_status.IsRunning)
             return Conflict(new { message = "Indexing already in progress.", _status.Completed, _status.Total });
 
-        var files = Directory.GetFiles(_indexer.StoragePath, "*.pdf");
+        var files = Directory.GetFiles(_indexer.StoragePath, "*.pdf")
+            .Concat(Directory.GetFiles(_indexer.StoragePath, "*.html"))
+            .ToArray();
 
         // Delete any partial records so unindexed files get reprocessed cleanly
         var unindexed = await _db.PdfDocuments.Where(d => !d.IsIndexed).ToListAsync();
@@ -91,7 +114,7 @@ public class SermonDocsController : ControllerBase
             .ToList();
 
         if (newFiles.Count == 0)
-            return Ok(new { message = "All PDFs in the folder are already indexed.", queued = 0 });
+            return Ok(new { message = "All files in the folder are already indexed.", queued = 0 });
 
         // Reset status and enqueue
         _status.IsRunning   = true;
@@ -105,7 +128,7 @@ public class SermonDocsController : ControllerBase
         foreach (var path in newFiles)
             await _queue.Writer.WriteAsync(path);
 
-        return Ok(new { message = $"Queued {newFiles.Count} PDF(s) for background indexing.", queued = newFiles.Count });
+        return Ok(new { message = $"Queued {newFiles.Count} file(s) for background indexing.", queued = newFiles.Count });
     }
 
     // GET /api/sermon-docs/page/{fileName}/{pageNumber}

@@ -57,10 +57,12 @@ public class IndexingWorker : BackgroundService
 
                 await using var stream = File.OpenRead(filePath);
                 var fileName = Path.GetFileName(filePath);
+                var contentType = fileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+                    ? "text/html" : "application/pdf";
                 var formFile = new FormFile(stream, 0, stream.Length, "file", fileName)
                 {
                     Headers     = new HeaderDictionary(),
-                    ContentType = "application/pdf"
+                    ContentType = contentType
                 };
 
                 await indexer.SaveAndIndexAsync(formFile);

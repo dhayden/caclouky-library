@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CacloukyLibrary.Data;
 using CacloukyLibrary.Models;
+using HtmlAgilityPack;
 using PdfPig = UglyToad.PdfPig.PdfDocument;
 
 namespace CacloukyLibrary.Services;
@@ -35,8 +37,8 @@ public class PdfIndexService
             await file.CopyToAsync(stream);
         }
 
-        // Extract text by page
-        var pageTexts = ExtractPages(filePath);
+        // Extract text by page (or section for HTML)
+        var pageTexts = ExtractContent(filePath);
 
         // Create document record
         var doc = new PdfDocument
@@ -65,7 +67,7 @@ public class PdfIndexService
         await _db.SaveChangesAsync();
 
         var filePath  = Path.Combine(_storageDir, doc.FileName);
-        var pageTexts = ExtractPages(filePath);
+        var pageTexts = ExtractContent(filePath);
         doc.PageCount = pageTexts.Count;
         await IndexDocumentAsync(doc, pageTexts);
     }
@@ -122,6 +124,11 @@ public class PdfIndexService
         return result;
     }
 
+    private static List<(int Page, string Text)> ExtractContent(string filePath) =>
+        Path.GetExtension(filePath).ToLowerInvariant() == ".html"
+            ? ExtractHtmlContent(filePath)
+            : ExtractPages(filePath);
+
     private static List<(int Page, string Text)> ExtractPages(string filePath)
     {
         var pages = new List<(int, string)>();
@@ -133,5 +140,53 @@ public class PdfIndexService
                 pages.Add((page.Number, text));
         }
         return pages;
+    }
+
+    // Splits HTML into sections by heading elements (h1/h2/h3), each treated as a page.
+    // Falls back to the full document as a single page if no headings are found.
+    private static List<(int Page, string Text)> ExtractHtmlContent(string filePath)
+    {
+        var htmlDoc = new HtmlDocument();
+        htmlDoc.Load(filePath);
+
+        // Remove non-content nodes
+        var removeNodes = htmlDoc.DocumentNode.SelectNodes("//script|//style|//head");
+        if (removeNodes != null)
+            foreach (var node in removeNodes.ToList())
+                node.Remove();
+
+        var body = htmlDoc.DocumentNode.SelectSingleNode("//body") ?? htmlDoc.DocumentNode;
+
+        var sections = new List<string>();
+        var current  = new StringBuilder();
+
+        foreach (var node in body.DescendantsAndSelf())
+        {
+            if (node.NodeType != HtmlNodeType.Element) continue;
+
+            if (node.Name is "h1" or "h2" or "h3")
+            {
+                if (current.Length > 50)
+                {
+                    sections.Add(current.ToString().Trim());
+                    current.Clear();
+                }
+            }
+
+            if (node.NodeType == HtmlNodeType.Element && node.ChildNodes.All(c => c.NodeType != HtmlNodeType.Element))
+            {
+                var text = HtmlEntity.DeEntitize(node.InnerText);
+                text = Regex.Replace(text, @"\s+", " ").Trim();
+                if (!string.IsNullOrEmpty(text))
+                    current.Append(text + " ");
+            }
+        }
+
+        if (current.Length > 0)
+            sections.Add(current.ToString().Trim());
+
+        return sections.Count > 0
+            ? sections.Select((s, i) => (i + 1, s)).ToList()
+            : [];
     }
 }

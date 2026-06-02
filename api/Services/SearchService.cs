@@ -9,12 +9,13 @@ public record Citation(string DocumentTitle, string FileName, int PageNumber);
 public record ScriptureRef(string Reference, string Book, int Chapter, int VerseStart, int VerseEnd);
 public record SearchResult(string Answer, IReadOnlyList<Citation> Citations, IReadOnlyList<ScriptureRef> Scriptures);
 
+public record PreloadedChunk(string Content, float[] Embedding, int PageNumber, string DocumentTitle, string FileName);
+
 public partial class SearchService
 {
     private readonly LibraryDbContext _db;
     private readonly OllamaService _ollama;
-    private readonly GeminiService _gemini;
-    private const int TopK = 8;
+    private const int TopK = 4;
 
     // Common English stopwords to ignore when extracting keywords
     private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
@@ -26,27 +27,36 @@ public partial class SearchService
         "did","not","no","so","if","by","as","into","than","from","just","also","any","all","more",
     };
 
-    public SearchService(LibraryDbContext db, OllamaService ollama, GeminiService gemini)
+    public SearchService(LibraryDbContext db, OllamaService ollama)
     {
         _db     = db;
         _ollama = ollama;
-        _gemini = gemini;
     }
 
-    public async Task<SearchResult> AskAsync(string question)
+    // Used by the preload job: finds matching sermon content via Ollama embedding only, no LLM generation.
+    // Returns null if no chunks meet the minimum similarity threshold.
+    public async Task<string?> FindSermonContentAsync(string query, IReadOnlyList<PreloadedChunk> preloadedChunks, float minScore = 0.3f)
     {
-        // 1. Embed the question locally via Ollama
-        var questionEmbedding = await _ollama.GetEmbeddingAsync(question);
+        if (preloadedChunks.Count == 0) return null;
 
-        // 2. Extract significant keywords for hybrid boosting
-        var keywords = question
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(w => Regex.Replace(w, @"[^\w]", "").ToLower())
-            .Where(w => w.Length > 3 && !Stopwords.Contains(w))
-            .ToHashSet();
+        var embedding = await _ollama.GetEmbeddingAsync(query);
 
-        // 3. Load all chunks
-        var chunks = await _db.PdfChunks
+        var top = preloadedChunks
+            .Select(c => new { c.Content, c.DocumentTitle, c.PageNumber, Score = CosineSimilarity(embedding, c.Embedding) })
+            .OrderByDescending(c => c.Score)
+            .Take(TopK)
+            .Where(c => c.Score >= minScore)
+            .ToList();
+
+        if (top.Count == 0) return null;
+
+        return string.Join("\n\n---\n\n",
+            top.Select(c => $"[{c.DocumentTitle}, Page {c.PageNumber}]\n{c.Content}"));
+    }
+
+    public async Task<IReadOnlyList<PreloadedChunk>> LoadAllChunksAsync()
+    {
+        var rows = await _db.PdfChunks
             .Include(c => c.Document)
             .Where(c => c.Document.IsIndexed)
             .Select(c => new
@@ -59,44 +69,64 @@ public partial class SearchService
             })
             .ToListAsync();
 
+        return rows.Select(c => new PreloadedChunk(
+            c.Content,
+            JsonSerializer.Deserialize<float[]>(c.Embedding) ?? [],
+            c.PageNumber,
+            c.DocumentTitle,
+            c.FileName)).ToList();
+    }
+
+    public async Task<SearchResult> AskAsync(string question)
+    {
+        var chunks = await LoadAllChunksAsync();
         if (chunks.Count == 0)
             return new SearchResult("No sermon documents have been indexed yet. Please ask an admin to upload and index the PDF files.", [], []);
+        return await AskAsync(question, chunks);
+    }
 
-        // 4. Hybrid score: cosine similarity + keyword bonus
-        var scored = chunks
+    public async Task<SearchResult> AskAsync(string question, IReadOnlyList<PreloadedChunk> preloadedChunks)
+    {
+        if (preloadedChunks.Count == 0)
+            return new SearchResult("No sermon documents have been indexed yet. Please ask an admin to upload and index the PDF files.", [], []);
+
+        // 1. Embed the question locally via Ollama
+        var questionEmbedding = await _ollama.GetEmbeddingAsync(question);
+
+        // 2. Extract significant keywords for hybrid boosting
+        var keywords = question
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => Regex.Replace(w, @"[^\w]", "").ToLower())
+            .Where(w => w.Length > 3 && !Stopwords.Contains(w))
+            .ToHashSet();
+
+        // 3. Hybrid score: cosine similarity + keyword bonus
+        var scored = preloadedChunks
             .Select(c =>
             {
-                var embedding  = JsonSerializer.Deserialize<float[]>(c.Embedding) ?? [];
-                var semantic   = CosineSimilarity(questionEmbedding, embedding);
-
-                // Boost chunks that contain keywords from the query (proper nouns, locations, names)
+                var semantic     = CosineSimilarity(questionEmbedding, c.Embedding);
                 var contentLower = c.Content.ToLower();
                 var keywordHits  = keywords.Count(kw => contentLower.Contains(kw));
                 var keywordBoost = keywordHits > 0 ? 0.15f * Math.Min(keywordHits, 3) : 0f;
-
                 return new { c.Content, c.PageNumber, c.DocumentTitle, c.FileName, Score = semantic + keywordBoost };
             })
             .OrderByDescending(c => c.Score)
             .Take(TopK)
             .ToList();
 
-        // 5. Build context
+        // 4. Build context and get answer from Ollama
         var contextChunks = scored.Select((c, i) =>
             $"[Source {i + 1}: {c.DocumentTitle}, Page {c.PageNumber}]\n{c.Content}");
 
-        // 6. Get answer from Gemini
-        var rawAnswer = await _gemini.GetAnswerAsync(question, contextChunks);
+        var answer = await _ollama.GetAnswerAsync(question, contextChunks);
 
-        // 7. Split answer from scripture list
-        var (answer, scriptures) = ParseAnswer(rawAnswer);
-
-        // 8. Deduplicate citations
+        // 5. Deduplicate citations
         var citations = scored
             .Select(c => new Citation(c.DocumentTitle, c.FileName, c.PageNumber))
             .DistinctBy(c => (c.DocumentTitle, c.PageNumber))
             .ToList();
 
-        return new SearchResult(answer, citations, scriptures);
+        return new SearchResult(answer, citations, []);
     }
 
     private static (string Answer, List<ScriptureRef> Scriptures) ParseAnswer(string raw)
