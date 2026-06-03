@@ -75,7 +75,7 @@ jobs:
             export Ollama__BaseUrl='http://localhost:11434'
             export Ollama__Model='nomic-embed-text'
             export Ollama__ChatModel='llama3.2'
-            export ASPNETCORE_URLS='http://0.0.0.0:8080'
+            export ASPNETCORE_URLS='http://0.0.0.0:6080'
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
