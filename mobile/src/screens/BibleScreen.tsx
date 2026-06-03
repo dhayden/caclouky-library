@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Modal, ScrollView, Alert,
+  ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
 import type { BibleVerse } from '../types';
 import * as api from '../api';
@@ -278,6 +278,12 @@ export default function BibleScreen() {
   const [highlights, setHighlights] = useState<Record<string, { id: number; color: string }>>({});
   const [notedRefs, setNotedRefs] = useState<Set<string>>(new Set());
   const [highlightTarget, setHighlightTarget] = useState<BibleVerse | null>(null);
+  const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
+
+  const showToast = (msg: string, error = false) => {
+    setToast({ msg, error });
+    setTimeout(() => setToast(null), 2500);
+  };
 
   const verseRef = (v: BibleVerse) => `${v.book} ${v.chapter}:${v.verse}`;
 
@@ -366,10 +372,10 @@ export default function BibleScreen() {
       const ref = verseRef(verse);
       await api.createNote({ title: expanded.noteTitle, content: expanded.noteContent, sourceType: 'bible', sourceRef: ref });
       setNotedRefs(prev => new Set([...prev, ref]));
-      Alert.alert('Saved', 'Note saved.');
+      showToast('Note saved.');
       setExpanded(e => e ? { ...e, noteTitle: '', noteContent: '', savingNote: false, tab: 'verse' } : null);
     } catch {
-      Alert.alert('Error', 'Could not save note.');
+      showToast('Could not save note.', true);
       setExpanded(e => e ? { ...e, savingNote: false } : null);
     }
   };
@@ -382,7 +388,7 @@ export default function BibleScreen() {
       if (existing) await api.deleteHighlight(existing.id);
       const res = await api.createHighlight('bible', ref, highlightTarget.text, color);
       setHighlights(prev => ({ ...prev, [ref]: { id: res.data.id, color } }));
-    } catch { Alert.alert('Error', 'Could not save highlight.'); }
+    } catch { showToast('Could not save highlight.', true); }
     setHighlightTarget(null);
   };
 
@@ -394,7 +400,7 @@ export default function BibleScreen() {
     try {
       await api.deleteHighlight(existing.id);
       setHighlights(prev => { const n = { ...prev }; delete n[ref]; return n; });
-    } catch { Alert.alert('Error', 'Could not remove highlight.'); }
+    } catch { showToast('Could not remove highlight.', true); }
     setHighlightTarget(null);
   };
 
@@ -435,6 +441,13 @@ export default function BibleScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
+      {/* Toast */}
+      {toast && (
+        <View style={[styles.toast, { backgroundColor: toast.error ? '#B71C1C' : '#1A1A2E' }]}>
+          <Text style={styles.toastText}>{toast.msg}</Text>
+        </View>
+      )}
+
       {/* Search bar */}
       <View style={[styles.searchRow, { borderBottomColor: c.border }]}>
         <TextInput style={[styles.searchInput, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]} placeholder="Search the Bible…" placeholderTextColor={c.textMuted} value={searchQuery} onChangeText={setSearchQuery} onSubmitEditing={doSearch} returnKeyType="search" />
@@ -590,4 +603,6 @@ const styles = StyleSheet.create({
   hlSwatchLabel: { fontSize: 9, color: '#000', fontWeight: '700' },
   hlRemove: { borderTopWidth: 1, paddingTop: 16, alignItems: 'center' },
   hlRemoveText: { fontSize: 14 },
+  toast: { position: 'absolute', top: 12, alignSelf: 'center', borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10, zIndex: 99, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
+  toastText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 });
