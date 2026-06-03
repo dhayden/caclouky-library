@@ -84,6 +84,9 @@ export interface Citation {
   documentTitle: string;
   fileName: string;
   pageNumber: number;
+  snippet?: string;
+  sermonDate?: string | null;
+  sectionTitle?: string | null;
 }
 
 export interface ScriptureRef {

@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CacloukyLibrary.Services;
 
-public record Citation(string DocumentTitle, string FileName, int PageNumber, string Snippet);
+public record Citation(string DocumentTitle, string FileName, int PageNumber, string Snippet, string? SermonDate, string? SectionTitle);
 public record ScriptureRef(string Reference, string Book, int Chapter, int VerseStart, int VerseEnd);
 public record SearchResult(string Answer, IReadOnlyList<Citation> Citations, IReadOnlyList<ScriptureRef> Scriptures);
 
-public record PreloadedChunk(string Content, float[] Embedding, int PageNumber, string DocumentTitle, string FileName);
+public record PreloadedChunk(string Content, float[] Embedding, int PageNumber, string DocumentTitle, string FileName, string? SermonDate, string? SectionTitle);
 
 public partial class SearchService
 {
@@ -42,7 +42,7 @@ public partial class SearchService
         var embedding = await _ollama.GetEmbeddingAsync(query);
 
         var top = preloadedChunks
-            .Select(c => new { c.Content, c.DocumentTitle, c.PageNumber, Score = CosineSimilarity(embedding, c.Embedding) })
+            .Select(c => new { c.Content, c.DocumentTitle, c.PageNumber, c.SermonDate, c.SectionTitle, Score = CosineSimilarity(embedding, c.Embedding) })
             .OrderByDescending(c => c.Score)
             .Take(TopK)
             .Where(c => c.Score >= minScore)
@@ -51,7 +51,12 @@ public partial class SearchService
         if (top.Count == 0) return null;
 
         return string.Join("\n\n---\n\n",
-            top.Select(c => $"[{c.DocumentTitle}, Page {c.PageNumber}]\n{c.Content}"));
+            top.Select(c =>
+            {
+                var label = c.SermonDate ?? c.DocumentTitle;
+                if (c.SectionTitle != null) label += $" — {c.SectionTitle}";
+                return $"[{label}]\n{c.Content}";
+            }));
     }
 
     public async Task<IReadOnlyList<PreloadedChunk>> LoadAllChunksAsync()
@@ -65,7 +70,9 @@ public partial class SearchService
                 c.Embedding,
                 c.PageNumber,
                 DocumentTitle = c.Document.Title,
-                FileName      = c.Document.FileName
+                FileName      = c.Document.FileName,
+                c.SermonDate,
+                c.SectionTitle,
             })
             .ToListAsync();
 
@@ -74,7 +81,9 @@ public partial class SearchService
             JsonSerializer.Deserialize<float[]>(c.Embedding) ?? [],
             c.PageNumber,
             c.DocumentTitle,
-            c.FileName)).ToList();
+            c.FileName,
+            c.SermonDate,
+            c.SectionTitle)).ToList();
     }
 
     public async Task<SearchResult> AskAsync(string question)
@@ -108,7 +117,7 @@ public partial class SearchService
                 var contentLower = c.Content.ToLower();
                 var keywordHits  = keywords.Count(kw => contentLower.Contains(kw));
                 var keywordBoost = keywordHits > 0 ? 0.15f * Math.Min(keywordHits, 3) : 0f;
-                return new { c.Content, c.PageNumber, c.DocumentTitle, c.FileName, Score = semantic + keywordBoost };
+                return new { c.Content, c.PageNumber, c.DocumentTitle, c.FileName, c.SermonDate, c.SectionTitle, Score = semantic + keywordBoost };
             })
             .OrderByDescending(c => c.Score)
             .Take(TopK)
@@ -120,10 +129,11 @@ public partial class SearchService
 
         var answer = await _ollama.GetAnswerAsync(question, contextChunks);
 
-        // 5. Deduplicate citations (include snippet for viewer highlighting)
+        // 5. Deduplicate citations (include snippet and metadata for viewer highlighting)
         var citations = scored
             .Select(c => new Citation(c.DocumentTitle, c.FileName, c.PageNumber,
-                c.Content.Length > 400 ? c.Content[..400] + "…" : c.Content))
+                c.Content.Length > 400 ? c.Content[..400] + "…" : c.Content,
+                c.SermonDate, c.SectionTitle))
             .DistinctBy(c => (c.DocumentTitle, c.PageNumber))
             .ToList();
 

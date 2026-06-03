@@ -9,6 +9,9 @@ public class PdfChunk
     public string Content { get; set; } = "";
     // nomic-embed-text (Ollama) produces 768-dimension vectors, stored as JSON float array
     public string Embedding { get; set; } = "[]";
+    // Populated for semantically-chunked HTML sermons; null for raw PDF chunks
+    public string? SermonDate    { get; set; }
+    public string? SectionTitle  { get; set; }
 
     public PdfDocument Document { get; set; } = null!;
 }

@@ -4,7 +4,7 @@ public record SermonDocDto(int Id, string Title, string FileName, int PageCount,
 
 public record ChatRequest(string Question);
 
-public record CitationDto(string DocumentTitle, string FileName, int PageNumber, string Snippet);
+public record CitationDto(string DocumentTitle, string FileName, int PageNumber, string Snippet, string? SermonDate, string? SectionTitle);
 
 public record ScriptureRefDto(string Reference, string Book, int Chapter, int VerseStart, int VerseEnd);
 
@@ -12,4 +12,4 @@ public record ChatResponse(string Answer, IReadOnlyList<CitationDto> Citations, 
 
 public record TextSearchRequest(string Query);
 
-public record TextSearchResultDto(string DocumentTitle, string FileName, int PageNumber, string Snippet);
+public record TextSearchResultDto(string DocumentTitle, string FileName, int PageNumber, string Snippet, string? SermonDate, string? SectionTitle);

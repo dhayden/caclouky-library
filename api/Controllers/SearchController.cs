@@ -37,7 +37,7 @@ public class SearchController : ControllerBase
 
         return Ok(new ChatResponse(
             result.Answer,
-            result.Citations.Select(c => new CitationDto(c.DocumentTitle, c.FileName, c.PageNumber, c.Snippet)).ToList(),
+            result.Citations.Select(c => new CitationDto(c.DocumentTitle, c.FileName, c.PageNumber, c.Snippet, c.SermonDate, c.SectionTitle)).ToList(),
             result.Scriptures.Select(s => new ScriptureRefDto(s.Reference, s.Book, s.Chapter, s.VerseStart, s.VerseEnd)).ToList()
         ));
     }
@@ -74,7 +74,9 @@ public class SearchController : ControllerBase
                 c.Document.Title,
                 c.Document.FileName,
                 c.PageNumber,
-                c.Content.Length > 400 ? c.Content.Substring(0, 400) + "…" : c.Content
+                c.Content.Length > 400 ? c.Content.Substring(0, 400) + "…" : c.Content,
+                c.SermonDate,
+                c.SectionTitle
             ))
             .ToListAsync();
 
