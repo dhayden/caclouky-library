@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using CacloukyLibrary.Data;
 using CacloukyLibrary.Models;
 using HtmlAgilityPack;
+using Microsoft.Extensions.Caching.Memory;
 using PdfPig = UglyToad.PdfPig.PdfDocument;
 
 namespace CacloukyLibrary.Services;
@@ -12,6 +13,7 @@ public class PdfIndexService
 {
     private readonly LibraryDbContext _db;
     private readonly OllamaService _ollama;
+    private readonly IMemoryCache _cache;
     private readonly string _storageDir;
     private const int ChunkSize    = 500;
     private const int ChunkOverlap = 50;
@@ -19,10 +21,11 @@ public class PdfIndexService
     // Internal record carrying all metadata for a chunk candidate
     private record SectionData(int Num, string? SermonDate, string? SectionTitle, string Text);
 
-    public PdfIndexService(LibraryDbContext db, OllamaService ollama, IConfiguration config, IWebHostEnvironment env)
+    public PdfIndexService(LibraryDbContext db, OllamaService ollama, IMemoryCache cache, IConfiguration config, IWebHostEnvironment env)
     {
         _db         = db;
         _ollama     = ollama;
+        _cache      = cache;
         _storageDir = Path.Combine(env.ContentRootPath, config["SermonPdfs:StoragePath"] ?? "sermon-pdfs");
         Directory.CreateDirectory(_storageDir);
     }
@@ -94,6 +97,7 @@ public class PdfIndexService
         doc.IsIndexed = true;
         doc.IndexedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        _cache.Remove(SearchService.ChunkCacheKey);
     }
 
     // Splits any section that exceeds ChunkSize words into overlapping sub-chunks.

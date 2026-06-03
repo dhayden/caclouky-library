@@ -17,7 +17,7 @@ public class OllamaService
 
         var baseUrl = config["Ollama:BaseUrl"] ?? "http://localhost:11434";
         _http.BaseAddress = new Uri(baseUrl);
-        _http.Timeout     = TimeSpan.FromMinutes(5);
+        _http.Timeout     = TimeSpan.FromSeconds(90);
     }
 
     public async Task<float[]> GetEmbeddingAsync(string text)

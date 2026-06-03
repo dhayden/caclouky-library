@@ -93,6 +93,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── Sermon Search Services ────────────────────────────────────────────────────
+builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<CacloukyLibrary.Services.OllamaService>();
 builder.Services.AddHttpClient<CacloukyLibrary.Services.BibleService>();
 builder.Services.AddScoped<CacloukyLibrary.Services.BibleService>();

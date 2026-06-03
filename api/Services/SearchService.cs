@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using CacloukyLibrary.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace CacloukyLibrary.Services;
 
@@ -15,7 +16,10 @@ public partial class SearchService
 {
     private readonly LibraryDbContext _db;
     private readonly OllamaService _ollama;
+    private readonly IMemoryCache _cache;
     private const int TopK = 4;
+    internal const string ChunkCacheKey = "sermon_chunks";
+    private static readonly TimeSpan ChunkCacheTtl = TimeSpan.FromMinutes(15);
 
     // Common English stopwords to ignore when extracting keywords
     private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
@@ -27,10 +31,11 @@ public partial class SearchService
         "did","not","no","so","if","by","as","into","than","from","just","also","any","all","more",
     };
 
-    public SearchService(LibraryDbContext db, OllamaService ollama)
+    public SearchService(LibraryDbContext db, OllamaService ollama, IMemoryCache cache)
     {
         _db     = db;
         _ollama = ollama;
+        _cache  = cache;
     }
 
     // Used by the preload job: finds matching sermon content via Ollama embedding only, no LLM generation.
@@ -61,6 +66,9 @@ public partial class SearchService
 
     public async Task<IReadOnlyList<PreloadedChunk>> LoadAllChunksAsync()
     {
+        if (_cache.TryGetValue(ChunkCacheKey, out IReadOnlyList<PreloadedChunk>? cached) && cached != null)
+            return cached;
+
         var rows = await _db.PdfChunks
             .Include(c => c.Document)
             .Where(c => c.Document.IsIndexed)
@@ -76,7 +84,7 @@ public partial class SearchService
             })
             .ToListAsync();
 
-        return rows.Select(c => new PreloadedChunk(
+        var chunks = rows.Select(c => new PreloadedChunk(
             c.Content,
             JsonSerializer.Deserialize<float[]>(c.Embedding) ?? [],
             c.PageNumber,
@@ -84,6 +92,9 @@ public partial class SearchService
             c.FileName,
             c.SermonDate,
             c.SectionTitle)).ToList();
+
+        _cache.Set(ChunkCacheKey, (IReadOnlyList<PreloadedChunk>)chunks, ChunkCacheTtl);
+        return chunks;
     }
 
     public async Task<SearchResult> AskAsync(string question)
