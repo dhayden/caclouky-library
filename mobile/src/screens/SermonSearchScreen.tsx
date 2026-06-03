@@ -9,6 +9,38 @@ import type { Citation, TextSearchResult, ScriptureRef, SearchHistory, BibleVers
 import * as api from '../api';
 import { useAuth } from '../context/AuthContext';
 
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+
+function parseSermonDate(fileName: string): string {
+  // YYMMDD format: 440818 → August 18, 1944
+  const m = fileName.match(/^(\d{2})(\d{2})(\d{2})/);
+  if (m) {
+    const year = `19${m[1]}`;
+    const month = MONTHS[parseInt(m[2]) - 1] ?? '';
+    const day   = parseInt(m[3]);
+    if (!month) return year;
+    return day > 0 ? `${month} ${day}, ${year}` : `${month} ${year}`;
+  }
+  if (fileName.startsWith('GoK'))  return 'Gospel of the Kingdom';
+  if (fileName.includes('MD'))     return 'Ministers\' Digest';
+  return fileName;
+}
+
+function HighlightedSnippet({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <Text style={styles.textResultSnippet}>{text}</Text>;
+  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+  return (
+    <Text style={styles.textResultSnippet}>
+      {parts.map((p, i) =>
+        p.toLowerCase() === query.toLowerCase()
+          ? <Text key={i} style={styles.textResultHighlight}>{p}</Text>
+          : p
+      )}
+    </Text>
+  );
+}
+
 const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
 const HIGHLIGHT_LABELS = ['Yellow', 'Green', 'Blue', 'Pink', 'Purple'];
 
@@ -34,6 +66,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
   const [mode, setMode] = useState<SearchMode>('ai');
   const [messages, setMessages] = useState<Message[]>([]);
   const [textResults, setTextResults] = useState<TextSearchResult[]>([]);
+  const [lastTextQuery, setLastTextQuery] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -88,6 +121,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
     try {
       const res = await api.textSearch(query);
       setTextResults(res.data.results);
+      setLastTextQuery(query);
     } catch {
       setTextResults([]);
       showToast('Search failed. Please try again.');
@@ -228,11 +262,12 @@ export default function SermonSearchScreen({ navigation }: Props) {
             <TouchableOpacity key={i} style={styles.textResult}
               onPress={() => navigation.navigate('PdfViewer', {
                 fileName: r.fileName, page: r.pageNumber,
-                title: `${r.documentTitle} p.${r.pageNumber}`,
+                title: `${parseSermonDate(r.documentTitle)} — p.${r.pageNumber}`,
                 highlight: r.snippet,
               })}>
-              <Text style={styles.textResultTitle}>{r.documentTitle} — p.{r.pageNumber}</Text>
-              <Text style={styles.textResultSnippet} numberOfLines={3}>{r.snippet}</Text>
+              <Text style={styles.textResultTitle}>{parseSermonDate(r.documentTitle)}</Text>
+              <Text style={styles.textResultSubtitle}>p.{r.pageNumber} · {r.fileName}</Text>
+              <HighlightedSnippet text={r.snippet} query={lastTextQuery} />
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -421,8 +456,10 @@ const styles = StyleSheet.create({
   actionBtn: { backgroundColor: '#EEF2FB', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#C8D4F0' },
   actionBtnText: { fontSize: 12, color: P, fontWeight: '600' },
   textResult: { backgroundColor: SRF, borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: BRD, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
-  textResultTitle: { fontSize: 13, fontWeight: '700', color: P, marginBottom: 6 },
+  textResultTitle: { fontSize: 14, fontWeight: '700', color: P, marginBottom: 2 },
+  textResultSubtitle: { fontSize: 11, color: MUT, marginBottom: 8, fontWeight: '500' },
   textResultSnippet: { fontSize: 13, color: '#5A5A72', lineHeight: 20 },
+  textResultHighlight: { backgroundColor: '#FFE066', color: TXT, fontWeight: '700' },
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 12 },
   colorSwatch: { width: 68, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   colorLabel: { fontSize: 11, fontWeight: '700', color: '#333' },
