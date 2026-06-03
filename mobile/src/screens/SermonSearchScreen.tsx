@@ -211,15 +211,18 @@ export default function SermonSearchScreen({ navigation }: Props) {
               {msg.citations && msg.citations.length > 0 && (
                 <View style={styles.citationsBox}>
                   <Text style={styles.citationsLabel}>Sources:</Text>
-                  {msg.citations.map((c, j) => (
-                    <TouchableOpacity key={j} onPress={() => navigation.navigate('PdfViewer', {
-                      fileName: c.fileName, page: c.pageNumber,
-                      title: `${c.documentTitle} p.${c.pageNumber}`,
-                      highlight: c.snippet,
-                    })}>
-                      <Text style={styles.citationLink}>{c.documentTitle} — p.{c.pageNumber}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {msg.citations.map((c, j) => {
+                    const dateLabel = c.sermonDate ?? parseSermonDate(c.documentTitle);
+                    const label = c.sectionTitle ? `${dateLabel} — ${c.sectionTitle}` : dateLabel;
+                    return (
+                      <TouchableOpacity key={j} onPress={() => navigation.navigate('PdfViewer', {
+                        fileName: c.fileName, page: c.pageNumber,
+                        title: label, highlight: c.snippet,
+                      })}>
+                        <Text style={styles.citationLink}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
@@ -258,18 +261,21 @@ export default function SermonSearchScreen({ navigation }: Props) {
               <Text style={styles.loadingText}>Searching…</Text>
             </View>
           )}
-          {textResults.map((r, i) => (
+          {textResults.map((r, i) => {
+            const dateLabel = r.sermonDate ?? parseSermonDate(r.documentTitle);
+            const titleLabel = r.sectionTitle ? `${dateLabel} — ${r.sectionTitle}` : dateLabel;
+            return (
             <TouchableOpacity key={i} style={styles.textResult}
               onPress={() => navigation.navigate('PdfViewer', {
                 fileName: r.fileName, page: r.pageNumber,
-                title: `${parseSermonDate(r.documentTitle)} — p.${r.pageNumber}`,
-                highlight: r.snippet,
+                title: titleLabel, highlight: r.snippet,
               })}>
-              <Text style={styles.textResultTitle}>{parseSermonDate(r.documentTitle)}</Text>
+              <Text style={styles.textResultTitle}>{titleLabel}</Text>
               <Text style={styles.textResultSubtitle}>p.{r.pageNumber} · {r.fileName}</Text>
               <HighlightedSnippet text={r.snippet} query={lastTextQuery} />
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
 

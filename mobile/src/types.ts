@@ -65,6 +65,8 @@ export interface Citation {
   fileName: string;
   pageNumber: number;
   snippet: string;
+  sermonDate?: string | null;
+  sectionTitle?: string | null;
 }
 
 export interface TextSearchResult {
@@ -72,6 +74,8 @@ export interface TextSearchResult {
   fileName: string;
   pageNumber: number;
   snippet: string;
+  sermonDate?: string | null;
+  sectionTitle?: string | null;
 }
 
 export interface ScriptureRef {
