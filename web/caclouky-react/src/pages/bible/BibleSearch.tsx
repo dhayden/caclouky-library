@@ -4,7 +4,7 @@ import {
   DialogTitle, Divider, FormControl, IconButton, InputLabel, Link, MenuItem,
   Select, TextField, Tooltip, Typography,
 } from '@mui/material';
-import { Search, NoteAdd, History, Delete, Close, Bookmark } from '@mui/icons-material';
+import { Search, NoteAdd, History, Delete, Close, Bookmark, MenuBook } from '@mui/icons-material';
 import type { BibleVerse, SearchHistory, UserHighlight } from '../../types';
 import * as api from '../../api';
 import { useAuth } from '../../auth/AuthContext';
@@ -31,6 +31,8 @@ export default function BibleSearch() {
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   const [highlightVerse, setHighlightVerse] = useState<{ verseNum: number; text: string } | null>(null);
   const [highlights, setHighlights] = useState<UserHighlight[]>([]);
+  const [sowdersDialog, setSowdersDialog] = useState<{ ref: string; teaching: string } | null>(null);
+  const [sowdersLoading, setSowdersLoading] = useState(false);
 
   useEffect(() => {
     api.getBibleBooks().then(r => {
@@ -108,6 +110,20 @@ export default function BibleSearch() {
   const verseHighlight = (verseNum: number): string | undefined => {
     const ref = `${selectedBook}:${selectedChapter}:${verseNum}`;
     return highlights.find(h => h.sourceRef === ref)?.color;
+  };
+
+  const openSowders = async (book: string, chapter: number, verse: number) => {
+    const ref = `${book} ${chapter}:${verse}`;
+    setSowdersDialog({ ref, teaching: '' });
+    setSowdersLoading(true);
+    try {
+      const res = await api.getScriptureTeaching(book, chapter, verse);
+      setSowdersDialog({ ref, teaching: res.data.teaching });
+    } catch {
+      setSowdersDialog({ ref, teaching: 'Could not load teaching. Check your connection.' });
+    } finally {
+      setSowdersLoading(false);
+    }
   };
 
   const displayVerses = searchResults ?? verses;
@@ -227,6 +243,12 @@ export default function BibleSearch() {
                             <Bookmark sx={{ fontSize: 14, color: 'text.disabled' }} />
                           </IconButton>
                         </Tooltip>
+                        <Tooltip title="What did Bro. Sowders teach about this verse?">
+                          <IconButton size="small" sx={{ p: 0.3 }}
+                            onClick={() => openSowders(v.book, v.chapter, v.verse)}>
+                            <MenuBook sx={{ fontSize: 14, color: 'text.disabled' }} />
+                          </IconButton>
+                        </Tooltip>
                       </Box>
                     )}
                   </Typography>
@@ -315,6 +337,20 @@ export default function BibleSearch() {
         <DialogActions>
           <Button onClick={() => setNoteDialog(null)}>Cancel</Button>
           <Button variant="contained" onClick={saveNote} disabled={!noteForm.title || !noteForm.content}>Save Note</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bro. Sowders teaching dialog */}
+      <Dialog open={!!sowdersDialog} onClose={() => setSowdersDialog(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Bro. Sowders on {sowdersDialog?.ref}</DialogTitle>
+        <DialogContent dividers>
+          {sowdersLoading
+            ? <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>
+            : <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 2 }}>{sowdersDialog?.teaching}</Typography>
+          }
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSowdersDialog(null)}>Close</Button>
         </DialogActions>
       </Dialog>
 

@@ -14,15 +14,11 @@ public class SearchController : ControllerBase
 {
     private readonly SearchService _search;
     private readonly LibraryDbContext _db;
-    private readonly ScripturePreloadService _preload;
-    private readonly ScripturePreloadStatus _preloadStatus;
 
-    public SearchController(SearchService search, LibraryDbContext db, ScripturePreloadService preload, ScripturePreloadStatus preloadStatus)
+    public SearchController(SearchService search, LibraryDbContext db)
     {
-        _search        = search;
-        _db            = db;
-        _preload       = preload;
-        _preloadStatus = preloadStatus;
+        _search = search;
+        _db     = db;
     }
 
     // POST /api/search/chat
@@ -84,7 +80,7 @@ public class SearchController : ControllerBase
     }
 
     // GET /api/search/scripture-teaching?book=John&chapter=3&verse=16
-    // Returns permanently stored teaching; generates and stores it if not yet available.
+    // Searches GoK4 HTML chunks for verbatim Sowders teaching on the given verse.
     [AllowAnonymous]
     [HttpGet("scripture-teaching")]
     public async Task<IActionResult> GetScriptureTeaching([FromQuery] string book, [FromQuery] int chapter, [FromQuery] int verse)
@@ -92,74 +88,65 @@ public class SearchController : ControllerBase
         if (string.IsNullOrWhiteSpace(book) || chapter < 1 || verse < 1)
             return BadRequest("book, chapter, and verse are required.");
 
-        var existing = await _db.ScriptureTeachings
-            .FirstOrDefaultAsync(t => t.Book == book && t.Chapter == chapter && t.Verse == verse);
-
-        if (existing != null)
-            return Ok(new { existing.Reference, existing.Teaching, existing.GeneratedAt, fromStore = true });
-
-        // Generate and store permanently
         var refStr = $"{book} {chapter}:{verse}";
-        var result = await _search.AskAsync($"What did Brother Sowders teach about {refStr}?");
 
-        var teaching = new ScriptureTeaching
-        {
-            Reference   = refStr,
-            Book        = book,
-            Chapter     = chapter,
-            Verse       = verse,
-            Teaching    = result.Answer,
-            GeneratedAt = DateTime.UtcNow,
-        };
+        var doc = await _db.PdfDocuments
+            .Where(d => d.IsIndexed && d.FileName.StartsWith("GoK"))
+            .OrderByDescending(d => d.IndexedAt)
+            .FirstOrDefaultAsync();
 
-        // Guard against race condition if two requests come in simultaneously
-        if (!await _db.ScriptureTeachings.AnyAsync(t => t.Book == book && t.Chapter == chapter && t.Verse == verse))
+        if (doc == null)
+            return Ok(new
+            {
+                reference   = refStr,
+                teaching    = "The Gospel of the Kingdom document has not been indexed yet. Please ask an admin to upload and index GoK4.html.",
+                generatedAt = DateTime.UtcNow,
+                fromStore   = false,
+            });
+
+        // Primary: look for chunks that explicitly mention the exact verse reference
+        var chunks = await _db.PdfChunks
+            .Where(c => c.DocumentId == doc.Id &&
+                        (EF.Functions.Like(c.Content, $"%{refStr}%") ||
+                         EF.Functions.Like(c.Content, $"%{book} {chapter}: {verse}%")))
+            .OrderBy(c => c.PageNumber).ThenBy(c => c.ChunkIndex)
+            .Take(3)
+            .ToListAsync();
+
+        // Fallback: broader chapter-level match
+        if (chunks.Count == 0)
         {
-            _db.ScriptureTeachings.Add(teaching);
-            await _db.SaveChangesAsync();
+            chunks = await _db.PdfChunks
+                .Where(c => c.DocumentId == doc.Id &&
+                            EF.Functions.Like(c.Content, $"%{book}%") &&
+                            EF.Functions.Like(c.Content, $"% {chapter}:%"))
+                .OrderBy(c => c.PageNumber).ThenBy(c => c.ChunkIndex)
+                .Take(2)
+                .ToListAsync();
         }
 
-        return Ok(new { teaching.Reference, teaching.Teaching, teaching.GeneratedAt, fromStore = false });
-    }
+        if (chunks.Count == 0)
+            return Ok(new
+            {
+                reference   = refStr,
+                teaching    = $"No specific teaching found for {refStr} in the Gospel of the Kingdom Papers.",
+                generatedAt = doc.IndexedAt ?? DateTime.UtcNow,
+                fromStore   = true,
+            });
 
-    // POST /api/search/preload-teachings  (admin only)
-    // Scans sermon chunks for referenced scriptures and pre-generates teachings for all of them.
-    [Authorize(Policy = "AdminOnly")]
-    [HttpPost("preload-teachings")]
-    public IActionResult StartPreload()
-    {
-        if (_preloadStatus.IsRunning)
-            return Conflict(new { message = "Preload already running.", _preloadStatus.Completed, _preloadStatus.Total });
+        var teaching = string.Join("\n\n---\n\n", chunks.Select(c =>
+        {
+            var label = c.SermonDate ?? doc.Title;
+            if (c.SectionTitle != null) label += $" — {c.SectionTitle}";
+            return $"[{label}]\n{c.Content}";
+        }));
 
-        _ = Task.Run(() => _preload.RunAsync());
-        return Ok(new { message = "Preload started. Poll /api/search/preload-status for progress." });
-    }
-
-    // GET /api/search/preload-status
-    [Authorize(Policy = "AdminOnly")]
-    [HttpGet("preload-status")]
-    public IActionResult GetPreloadStatus() => Ok(new
-    {
-        _preloadStatus.IsRunning,
-        _preloadStatus.Total,
-        _preloadStatus.Completed,
-        _preloadStatus.Skipped,
-        _preloadStatus.Failed,
-        _preloadStatus.CurrentRef,
-        _preloadStatus.StartedAt,
-        _preloadStatus.EstimatedRemaining,
-        PercentComplete = _preloadStatus.Total > 0
-            ? Math.Round(_preloadStatus.Completed * 100.0 / _preloadStatus.Total, 1)
-            : 0,
-    });
-
-    // POST /api/search/cancel-preload
-    [Authorize(Policy = "AdminOnly")]
-    [HttpPost("cancel-preload")]
-    public IActionResult CancelPreload()
-    {
-        if (!_preloadStatus.IsRunning) return BadRequest(new { message = "No preload is running." });
-        _preload.Cancel();
-        return Ok(new { message = "Cancellation requested." });
+        return Ok(new
+        {
+            reference   = refStr,
+            teaching,
+            generatedAt = doc.IndexedAt ?? DateTime.UtcNow,
+            fromStore   = true,
+        });
     }
 }

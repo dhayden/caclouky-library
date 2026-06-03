@@ -97,6 +97,15 @@ export interface ScriptureRef {
   verseEnd: number;
 }
 
+export interface TextSearchResult {
+  documentTitle: string;
+  fileName: string;
+  pageNumber: number;
+  snippet: string;
+  sermonDate?: string | null;
+  sectionTitle?: string | null;
+}
+
 export interface ChatResponse {
   answer: string;
   citations: Citation[];

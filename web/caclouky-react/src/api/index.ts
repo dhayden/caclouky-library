@@ -50,9 +50,23 @@ export const deleteSermonDoc = (id: number) => client.delete(`/sermon-docs/${id}
 export const indexAllSermonDocs = () => client.post<{ message: string; queued: number }>('/sermon-docs/index-all', {});
 export const getIndexStatus = () => client.get<IndexStatus>('/sermon-docs/index-status');
 
+// Sermon page content
+export const getSermonPage = (fileName: string, pageNumber: number) =>
+  client.get<{ title: string; fileName: string; pageNumber: number; pageCount: number; text: string }>(
+    `/sermon-docs/page/${encodeURIComponent(fileName)}/${pageNumber}`
+  );
+
 // Search
 export const chatSearch = (question: string) =>
   client.post<ChatResponse>('/search/chat', { question });
+
+export const textSearch = (query: string) =>
+  client.post<{ results: import('../types').TextSearchResult[] }>('/search/text', { query });
+
+export const getScriptureTeaching = (book: string, chapter: number, verse: number) =>
+  client.get<{ reference: string; teaching: string; generatedAt: string; fromStore: boolean }>(
+    '/search/scripture-teaching', { params: { book, chapter, verse } }
+  );
 
 // Bible
 export const getBibleBooks = () => client.get<string[]>('/bible/books');

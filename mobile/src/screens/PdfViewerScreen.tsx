@@ -34,6 +34,7 @@ function HighlightedText({ text, highlight }: { text: string; highlight?: string
 
 export default function PdfViewerScreen({ route, navigation }: Props) {
   const { fileName, page, highlight } = route.params;
+  const isHtml = fileName.toLowerCase().endsWith('.html');
   const [text, setText] = useState('');
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(page);
@@ -46,7 +47,7 @@ export default function PdfViewerScreen({ route, navigation }: Props) {
       setText(res.data.text);
       setPageCount(res.data.pageCount);
       setCurrentPage(p);
-      navigation.setOptions({ title: `${res.data.title} — p.${p}` });
+      navigation.setOptions({ title: res.data.title });
     } finally {
       setLoading(false);
     }
@@ -64,23 +65,26 @@ export default function PdfViewerScreen({ route, navigation }: Props) {
         </ScrollView>
       )}
 
-      <View style={styles.nav}>
-        <TouchableOpacity
-          style={[styles.navBtn, currentPage <= 1 && styles.navBtnDisabled]}
-          onPress={() => load(currentPage - 1)}
-          disabled={currentPage <= 1 || loading}
-        >
-          <Text style={styles.navBtnText}>‹ Prev</Text>
-        </TouchableOpacity>
-        <Text style={styles.pageIndicator}>Page {currentPage} of {pageCount}</Text>
-        <TouchableOpacity
-          style={[styles.navBtn, currentPage >= pageCount && styles.navBtnDisabled]}
-          onPress={() => load(currentPage + 1)}
-          disabled={currentPage >= pageCount || loading}
-        >
-          <Text style={styles.navBtnText}>Next ›</Text>
-        </TouchableOpacity>
-      </View>
+      {/* HTML sections don't have sequential page numbers — hide nav */}
+      {!isHtml && (
+        <View style={styles.nav}>
+          <TouchableOpacity
+            style={[styles.navBtn, currentPage <= 1 && styles.navBtnDisabled]}
+            onPress={() => load(currentPage - 1)}
+            disabled={currentPage <= 1 || loading}
+          >
+            <Text style={styles.navBtnText}>‹ Prev</Text>
+          </TouchableOpacity>
+          <Text style={styles.pageIndicator}>Page {currentPage} of {pageCount}</Text>
+          <TouchableOpacity
+            style={[styles.navBtn, currentPage >= pageCount && styles.navBtnDisabled]}
+            onPress={() => load(currentPage + 1)}
+            disabled={currentPage >= pageCount || loading}
+          >
+            <Text style={styles.navBtnText}>Next ›</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
