@@ -54,7 +54,7 @@ export default function SermonSearch() {
   const { isLoggedIn } = useAuth();
   const [mode, setMode] = useState<SearchMode>('ai');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [textResults, setTextResults] = useState<TextSearchResult[]>([]);
+  const [textResults, setTextResults] = useState<{ exactMatches: TextSearchResult[]; allWordMatches: TextSearchResult[] } | null>(null);
   const [lastTextQuery, setLastTextQuery] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -90,7 +90,7 @@ export default function SermonSearch() {
   const switchMode = (m: SearchMode) => {
     setMode(m);
     setMessages([]);
-    setTextResults([]);
+    setTextResults(null);
     setInput('');
   };
 
@@ -121,9 +121,9 @@ export default function SermonSearch() {
     if (isLoggedIn()) api.saveSearchHistory(query, 'sermon').then(loadHistory);
     try {
       const res = await api.textSearch(query);
-      setTextResults(res.data.results);
+      setTextResults({ exactMatches: res.data.exactMatches, allWordMatches: res.data.allWordMatches });
     } catch {
-      setTextResults([]);
+      setTextResults(null);
     } finally {
       setLoading(false);
     }
@@ -283,33 +283,45 @@ export default function SermonSearch() {
 
         {/* Text mode */}
         {mode === 'text' && (
-          textResults.length === 0 && !loading ? (
+          !textResults && !loading ? (
             <Box py={4}>
               <Typography variant="body2" color="text.secondary">Enter keywords to search sermon text directly.</Typography>
             </Box>
-          ) : (
-            textResults.map((r, i) => {
-              const dateLabel = r.sermonDate ?? parseSermonDate(r.documentTitle);
-              const titleLabel = r.sectionTitle ? `${dateLabel} — ${r.sectionTitle}` : dateLabel;
-              const query = lastTextQuery;
-              const parts = r.snippet.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-              return (
-                <Paper key={i} variant="outlined" sx={{ p: 2, mb: 1.5, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
-                  onClick={() => openCitation({ documentTitle: r.documentTitle, fileName: r.fileName, pageNumber: r.pageNumber, snippet: r.snippet, sermonDate: r.sermonDate, sectionTitle: r.sectionTitle })}>
-                  <Typography variant="subtitle2" color="primary" fontWeight="bold">{titleLabel}</Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" mb={1}>
-                    p.{r.pageNumber} · {r.fileName}
+          ) : textResults && (
+            <>
+              {([
+                { label: 'Exact Match', items: textResults.exactMatches },
+                { label: 'All Words',   items: textResults.allWordMatches },
+              ] as const).map(({ label, items }) => items.length > 0 && (
+                <Box key={label} mb={2}>
+                  <Typography variant="subtitle1" fontWeight="bold" color="primary" mb={1}>
+                    {label} ({items.length})
                   </Typography>
-                  <Typography variant="body2">
-                    {parts.map((p, pi) =>
-                      p.toLowerCase() === query.toLowerCase()
-                        ? <mark key={pi} style={{ backgroundColor: '#FFE066', padding: 0 }}>{p}</mark>
-                        : p
-                    )}
-                  </Typography>
-                </Paper>
-              );
-            })
+                  {items.map((r, i) => {
+                    const dateLabel = r.sermonDate ?? parseSermonDate(r.documentTitle);
+                    const titleLabel = r.sectionTitle ? `${dateLabel} — ${r.sectionTitle}` : dateLabel;
+                    const query = lastTextQuery;
+                    const parts = r.snippet.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+                    return (
+                      <Paper key={i} variant="outlined" sx={{ p: 2, mb: 1.5, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                        onClick={() => openCitation({ documentTitle: r.documentTitle, fileName: r.fileName, pageNumber: r.pageNumber, snippet: r.snippet, sermonDate: r.sermonDate, sectionTitle: r.sectionTitle })}>
+                        <Typography variant="subtitle2" color="primary" fontWeight="bold">{titleLabel}</Typography>
+                        <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                          p.{r.pageNumber} · {r.fileName}
+                        </Typography>
+                        <Typography variant="body2">
+                          {parts.map((p, pi) =>
+                            p.toLowerCase() === query.toLowerCase()
+                              ? <mark key={pi} style={{ backgroundColor: '#FFE066', padding: 0 }}>{p}</mark>
+                              : p
+                          )}
+                        </Typography>
+                      </Paper>
+                    );
+                  })}
+                </Box>
+              ))}
+            </>
           )
         )}
 

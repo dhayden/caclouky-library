@@ -14,11 +14,36 @@ public class SearchController : ControllerBase
 {
     private readonly SearchService _search;
     private readonly LibraryDbContext _db;
+    private readonly PdfIndexService _indexService;
 
-    public SearchController(SearchService search, LibraryDbContext db)
+    public SearchController(SearchService search, LibraryDbContext db, PdfIndexService indexService)
     {
-        _search = search;
-        _db     = db;
+        _search       = search;
+        _db           = db;
+        _indexService = indexService;
+    }
+
+    // Extracts a readable snippet centred on the matched phrase
+    private static string ExtractSnippet(string text, string phrase)
+    {
+        var idx = text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return text.Length > 400 ? text[..400] + "…" : text;
+        var start = Math.Max(0, idx - 100);
+        var end   = Math.Min(text.Length, idx + phrase.Length + 250);
+        return (start > 0 ? "…" : "") + text[start..end] + (end < text.Length ? "…" : "");
+    }
+
+    private static string ExtractSnippetAllWords(string text, string[] terms)
+    {
+        // Find the earliest term and centre the snippet there
+        var idx = terms
+            .Select(t => text.IndexOf(t, StringComparison.OrdinalIgnoreCase))
+            .Where(i => i >= 0)
+            .DefaultIfEmpty(0)
+            .Min();
+        var start = Math.Max(0, idx - 80);
+        var end   = Math.Min(text.Length, idx + 350);
+        return (start > 0 ? "…" : "") + text[start..end] + (end < text.Length ? "…" : "");
     }
 
     // POST /api/search/chat
@@ -41,58 +66,39 @@ public class SearchController : ControllerBase
     // POST /api/search/text
     [AllowAnonymous]
     [HttpPost("text")]
-    public async Task<IActionResult> TextSearch([FromBody] TextSearchRequest request)
+    public IActionResult TextSearch([FromBody] TextSearchRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Query) || request.Query.Length < 2)
             return BadRequest("Query must be at least 2 characters.");
 
         var phrase = request.Query.Trim();
-
-        // Significant words only (length > 2, skip stopwords) for all-words matching
         var significantTerms = phrase
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(t => t.Length > 2 && !SearchService.Stopwords.Contains(t))
             .ToArray();
 
-        var gokId = await _db.PdfDocuments
-            .Where(d => d.IsIndexed && d.FileName.StartsWith("GoK4"))
-            .Select(d => d.Id).FirstOrDefaultAsync();
-
-        if (gokId == 0)
+        var sections = _indexService.GetGoK4Sections();
+        if (sections.Count == 0)
             return Ok(new { exactMatches = Array.Empty<TextSearchResultDto>(), allWordMatches = Array.Empty<TextSearchResultDto>(), total = 0 });
 
-        // Pass 1: exact phrase match
-        var exactMatches = await _db.PdfChunks
-            .Include(c => c.Document)
-            .Where(c => c.DocumentId == gokId && EF.Functions.Like(c.Content, $"%{phrase}%"))
-            .OrderBy(c => c.PageNumber)
-            .Select(c => new TextSearchResultDto(
-                c.Document.Title, c.Document.FileName, c.PageNumber,
-                c.Content.Length > 500 ? c.Content.Substring(0, 500) + "…" : c.Content,
-                c.SermonDate, c.SectionTitle))
-            .ToListAsync();
+        const string title = "Gospel of the Kingdom Papers";
+        const string file  = "GoK4.html";
 
-        // Pass 2: all significant words present, but NOT an exact phrase match
+        var exactMatches = sections
+            .Where(s => s.Text.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Num)
+            .Select(s => new TextSearchResultDto(title, file, s.Num, ExtractSnippet(s.Text, phrase), s.SermonDate, s.SectionTitle))
+            .ToList();
+
         List<TextSearchResultDto> allWordMatches = [];
         if (significantTerms.Length > 0)
         {
-            var allWordsQuery = _db.PdfChunks
-                .Include(c => c.Document)
-                .Where(c => c.DocumentId == gokId && !EF.Functions.Like(c.Content, $"%{phrase}%"));
-
-            foreach (var term in significantTerms)
-            {
-                var t = term;
-                allWordsQuery = allWordsQuery.Where(c => EF.Functions.Like(c.Content, $"%{t}%"));
-            }
-
-            allWordMatches = await allWordsQuery
-                .OrderBy(c => c.PageNumber)
-                .Select(c => new TextSearchResultDto(
-                    c.Document.Title, c.Document.FileName, c.PageNumber,
-                    c.Content.Length > 500 ? c.Content.Substring(0, 500) + "…" : c.Content,
-                    c.SermonDate, c.SectionTitle))
-                .ToListAsync();
+            allWordMatches = sections
+                .Where(s => !s.Text.Contains(phrase, StringComparison.OrdinalIgnoreCase)
+                         && significantTerms.All(t => s.Text.Contains(t, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(s => s.Num)
+                .Select(s => new TextSearchResultDto(title, file, s.Num, ExtractSnippetAllWords(s.Text, significantTerms), s.SermonDate, s.SectionTitle))
+                .ToList();
         }
 
         return Ok(new { exactMatches, allWordMatches, total = exactMatches.Count + allWordMatches.Count });

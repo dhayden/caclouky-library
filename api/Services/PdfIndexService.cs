@@ -18,8 +18,8 @@ public class PdfIndexService
     private const int ChunkSize    = 500;
     private const int ChunkOverlap = 50;
 
-    // Internal record carrying all metadata for a chunk candidate
-    private record SectionData(int Num, string? SermonDate, string? SectionTitle, string Text);
+    // Record carrying all metadata for a parsed section
+    internal record SectionData(int Num, string? SermonDate, string? SectionTitle, string Text);
 
     public PdfIndexService(LibraryDbContext db, OllamaService ollama, IMemoryCache cache, IConfiguration config, IWebHostEnvironment env)
     {
@@ -31,6 +31,20 @@ public class PdfIndexService
     }
 
     public string StoragePath => _storageDir;
+
+    // Parses GoK4.html directly into sermon sections — results cached 24h.
+    // Searching the source file avoids chunk-boundary gaps that exist in the DB index.
+    internal IReadOnlyList<SectionData> GetGoK4Sections()
+    {
+        const string cacheKey = "gok4_file_sections";
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<SectionData>? cached) && cached != null)
+            return cached;
+        var filePath = Path.Combine(_storageDir, "GoK4.html");
+        if (!File.Exists(filePath)) return [];
+        var sections = (IReadOnlyList<SectionData>)ExtractHtmlSections(filePath);
+        _cache.Set(cacheKey, sections, TimeSpan.FromHours(24));
+        return sections;
+    }
 
     public async Task<PdfDocument> SaveAndIndexAsync(IFormFile file)
     {
@@ -178,6 +192,17 @@ public class PdfIndexService
 
         foreach (var node in body.Descendants())
         {
+            // Process raw text nodes directly — this captures text around inline elements
+            // like <pb_link> and <u> that the old leaf-element check would skip entirely.
+            if (node.NodeType == HtmlNodeType.Text)
+            {
+                if (node.ParentNode?.Name is "h1" or "h2" or "h3" or "h4" or "h5") continue;
+                var txt = CleanText(node.InnerText);
+                if (!string.IsNullOrEmpty(txt))
+                    current.Append(txt + " ");
+                continue;
+            }
+
             if (node.NodeType != HtmlNodeType.Element) continue;
 
             switch (node.Name)
@@ -196,7 +221,6 @@ public class PdfIndexService
                 }
                 case "h3":
                 {
-                    // h3 is always a new sermon section
                     Flush();
                     curDate  = CleanText(node.InnerText);
                     curTitle = null;
@@ -204,28 +228,15 @@ public class PdfIndexService
                 }
                 case "h4":
                 {
-                    // h4 is a topic heading within a sermon — flush if we have content
                     if (current.Length > 100) Flush();
                     curTitle = CleanText(node.InnerText);
                     break;
                 }
                 case "h5":
                 {
-                    // Speaker label — include in text to preserve Q&A context
                     var label = CleanText(node.InnerText);
                     if (!string.IsNullOrEmpty(label))
                         current.Append($"\n{label}\n");
-                    break;
-                }
-                default:
-                {
-                    // Leaf text nodes only (skip containers to avoid duplication)
-                    if (node.ChildNodes.All(c => c.NodeType != HtmlNodeType.Element))
-                    {
-                        var txt = CleanText(node.InnerText);
-                        if (!string.IsNullOrEmpty(txt))
-                            current.Append(txt + " ");
-                    }
                     break;
                 }
             }

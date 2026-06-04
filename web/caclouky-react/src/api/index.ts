@@ -61,7 +61,7 @@ export const chatSearch = (question: string) =>
   client.post<ChatResponse>('/search/chat', { question });
 
 export const textSearch = (query: string) =>
-  client.post<{ results: import('../types').TextSearchResult[] }>('/search/text', { query });
+  client.post<{ exactMatches: import('../types').TextSearchResult[]; allWordMatches: import('../types').TextSearchResult[]; total: number }>('/search/text', { query });
 
 export const getScriptureTeaching = (book: string, chapter: number, verse: number) =>
   client.get<{ reference: string; teaching: string; generatedAt: string; fromStore: boolean }>(
