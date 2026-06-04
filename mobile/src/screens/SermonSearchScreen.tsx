@@ -78,8 +78,11 @@ export default function SermonSearchScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [mode, setMode] = useState<SearchMode>('ai');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [textResults, setTextResults] = useState<TextSearchResult[]>([]);
+  const [exactMatches, setExactMatches] = useState<TextSearchResult[]>([]);
+  const [allWordMatches, setAllWordMatches] = useState<TextSearchResult[]>([]);
   const [lastTextQuery, setLastTextQuery] = useState('');
+  const [exactCollapsed, setExactCollapsed] = useState(false);
+  const [allWordsCollapsed, setAllWordsCollapsed] = useState(true);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -145,13 +148,17 @@ export default function SermonSearchScreen({ navigation }: Props) {
     if (!query.trim() || loading) return;
     setInput('');
     setLoading(true);
+    setLastTextQuery(query);
+    setExactCollapsed(false);
+    setAllWordsCollapsed(true);
     if (user) api.saveSearchHistory(query, 'sermon').then(loadHistory);
     try {
       const res = await api.textSearch(query);
-      setTextResults(res.data.results ?? []);
-      setLastTextQuery(query);
+      setExactMatches(res.data.exactMatches ?? []);
+      setAllWordMatches(res.data.allWordMatches ?? []);
     } catch {
-      setTextResults([]);
+      setExactMatches([]);
+      setAllWordMatches([]);
       showToast('Search failed. Please try again.');
     } finally {
       setLoading(false);
@@ -160,17 +167,18 @@ export default function SermonSearchScreen({ navigation }: Props) {
 
   const send = (q: string) => mode === 'ai' ? sendAi(q) : sendText(q);
 
-  const groupedResults = useMemo(() => {
-    if (!textResults.length) return [];
-    const sorted = [...textResults].sort((a, b) => extractSortKey(a.fileName) - extractSortKey(b.fileName));
-    const map = new Map<number, typeof textResults>();
-    for (const r of sorted) {
-      const yr = extractYear(r.fileName, r.sermonDate);
-      if (!map.has(yr)) map.set(yr, []);
-      map.get(yr)!.push(r);
+  const totalTextResults = exactMatches.length + allWordMatches.length;
+
+  const buildTitle = (r: TextSearchResult): string => {
+    const parts: string[] = ['Gospel of the Kingdom Papers'];
+    if (r.sermonDate) {
+      const yr = r.sermonDate.match(/\d{4}/)?.[0];
+      if (yr) parts.push(yr);
+      parts.push(r.sermonDate);
     }
-    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
-  }, [textResults]);
+    if (r.sectionTitle) parts.push(r.sectionTitle);
+    return parts.join(' | ');
+  };
 
   const openScripture = async (ref: ScriptureRef) => {
     try {
@@ -188,7 +196,8 @@ export default function SermonSearchScreen({ navigation }: Props) {
   const switchMode = (m: SearchMode) => {
     setMode(m);
     setMessages([]);
-    setTextResults([]);
+    setExactMatches([]);
+    setAllWordMatches([]);
     setInput('');
     setSelectedTopic(null);
     if (m === 'topics' && !topicsLoaded) loadTopics();
@@ -328,52 +337,49 @@ export default function SermonSearchScreen({ navigation }: Props) {
         </ScrollView>
       )}
 
-      {/* Text mode: grouped results */}
+      {/* Text mode: Exact Match + All Words groups */}
       {mode === 'text' && (
         <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
-          {!loading && textResults.length === 0 && (
-            <Text style={styles.suggestionsLabel}>Enter keywords to search sermon text directly.</Text>
+          {!loading && totalTextResults === 0 && (
+            <Text style={styles.suggestionsLabel}>
+              {lastTextQuery ? `No results for "${lastTextQuery}"` : 'Enter keywords to search the Gospel of the Kingdom Papers.'}
+            </Text>
           )}
           {loading && (
             <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color="#1976d2" />
+              <ActivityIndicator size="small" color={P} />
               <Text style={styles.loadingText}>Searching…</Text>
             </View>
           )}
-          {!loading && textResults.length > 0 && (
+          {!loading && totalTextResults > 0 && (
             <Text style={styles.resultCount}>
-              {textResults.length} result{textResults.length !== 1 ? 's' : ''} for "{lastTextQuery}"
+              Search results for Gospel of the Kingdom Papers (GoK)
             </Text>
           )}
-          {groupedResults.map(([year, results]) => {
-            const collapsed = collapsedYears.has(year);
-            return (
-            <View key={year}>
-              <TouchableOpacity style={styles.yearHeader} onPress={() => toggleYear(year)} activeOpacity={0.7}>
-                <Text style={styles.yearHeaderText}>{year === 9999 ? 'Unknown Date' : year}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.yearHeaderCount}>{results.length}</Text>
-                  <Text style={{ color: P, fontSize: 15, fontWeight: '700' }}>{collapsed ? '▶' : '▼'}</Text>
-                </View>
+          {[
+            { label: 'Exact Match', results: exactMatches, collapsed: exactCollapsed, toggle: () => setExactCollapsed(v => !v) },
+            { label: 'All Words', results: allWordMatches, collapsed: allWordsCollapsed, toggle: () => setAllWordsCollapsed(v => !v) },
+          ].map(group => group.results.length === 0 ? null : (
+            <View key={group.label}>
+              <TouchableOpacity style={styles.yearHeader} onPress={group.toggle} activeOpacity={0.7}>
+                <Text style={styles.yearHeaderText}>{group.label} ({group.results.length})</Text>
+                <Text style={{ color: P, fontSize: 15, fontWeight: '700' }}>{group.collapsed ? '▼' : '▲'}</Text>
               </TouchableOpacity>
-              {!collapsed && results.map((r, i) => {
-                const dateLabel = r.sermonDate ?? parseSermonDate(r.fileName);
-                const titleLabel = r.sectionTitle ? `${dateLabel} — ${r.sectionTitle}` : dateLabel;
+              {!group.collapsed && group.results.map((r, i) => {
+                const title = buildTitle(r);
                 return (
                   <TouchableOpacity key={i} style={styles.textResult}
                     onPress={() => navigation.navigate('PdfViewer', {
                       fileName: r.fileName, page: r.pageNumber,
-                      title: titleLabel, highlight: r.snippet,
+                      title, highlight: r.snippet,
                     })}>
-                    <Text style={styles.textResultTitle}>{titleLabel}</Text>
-                    <Text style={styles.textResultSubtitle}>p.{r.pageNumber} · {r.fileName}</Text>
+                    <Text style={styles.textResultTitle}>{title}</Text>
                     <HighlightedSnippet text={r.snippet} query={lastTextQuery} />
                   </TouchableOpacity>
                 );
               })}
             </View>
-            );
-          })}
+          ))}
         </ScrollView>
       )}
 

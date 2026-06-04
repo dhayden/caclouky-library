@@ -43,49 +43,59 @@ public class SearchController : ControllerBase
     [HttpPost("text")]
     public async Task<IActionResult> TextSearch([FromBody] TextSearchRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Query) || request.Query.Length < 3)
-            return BadRequest("Query must be at least 3 characters.");
+        if (string.IsNullOrWhiteSpace(request.Query) || request.Query.Length < 2)
+            return BadRequest("Query must be at least 2 characters.");
 
-        var terms = request.Query
+        var phrase = request.Query.Trim();
+
+        // Significant words only (length > 2, skip stopwords) for all-words matching
+        var significantTerms = phrase
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(t => t.Length > 2)
+            .Where(t => t.Length > 2 && !SearchService.Stopwords.Contains(t))
             .ToArray();
 
-        if (terms.Length == 0) return BadRequest("No searchable terms.");
-
-        // Text search runs only against GoK4 — the Gospel of the Kingdom papers.
-        // Dated sermon PDFs are indexed for AI semantic search, not keyword browsing.
-        var gok = await _db.PdfDocuments
+        var gokId = await _db.PdfDocuments
             .Where(d => d.IsIndexed && d.FileName.StartsWith("GoK4"))
-            .Select(d => d.Id)
-            .FirstOrDefaultAsync();
+            .Select(d => d.Id).FirstOrDefaultAsync();
 
-        if (gok == 0)
-            return Ok(new { results = Array.Empty<TextSearchResultDto>(), total = 0 });
+        if (gokId == 0)
+            return Ok(new { exactMatches = Array.Empty<TextSearchResultDto>(), allWordMatches = Array.Empty<TextSearchResultDto>(), total = 0 });
 
-        var query = _db.PdfChunks
+        // Pass 1: exact phrase match
+        var exactMatches = await _db.PdfChunks
             .Include(c => c.Document)
-            .Where(c => c.DocumentId == gok);
-
-        foreach (var term in terms)
-        {
-            var t = term;
-            query = query.Where(c => EF.Functions.Like(c.Content, $"%{t}%"));
-        }
-
-        var results = await query
+            .Where(c => c.DocumentId == gokId && EF.Functions.Like(c.Content, $"%{phrase}%"))
             .OrderBy(c => c.PageNumber)
             .Select(c => new TextSearchResultDto(
-                c.Document.Title,
-                c.Document.FileName,
-                c.PageNumber,
-                c.Content.Length > 400 ? c.Content.Substring(0, 400) + "…" : c.Content,
-                c.SermonDate,
-                c.SectionTitle
-            ))
+                c.Document.Title, c.Document.FileName, c.PageNumber,
+                c.Content.Length > 500 ? c.Content.Substring(0, 500) + "…" : c.Content,
+                c.SermonDate, c.SectionTitle))
             .ToListAsync();
 
-        return Ok(new { results, total = results.Count });
+        // Pass 2: all significant words present, but NOT an exact phrase match
+        List<TextSearchResultDto> allWordMatches = [];
+        if (significantTerms.Length > 0)
+        {
+            var allWordsQuery = _db.PdfChunks
+                .Include(c => c.Document)
+                .Where(c => c.DocumentId == gokId && !EF.Functions.Like(c.Content, $"%{phrase}%"));
+
+            foreach (var term in significantTerms)
+            {
+                var t = term;
+                allWordsQuery = allWordsQuery.Where(c => EF.Functions.Like(c.Content, $"%{t}%"));
+            }
+
+            allWordMatches = await allWordsQuery
+                .OrderBy(c => c.PageNumber)
+                .Select(c => new TextSearchResultDto(
+                    c.Document.Title, c.Document.FileName, c.PageNumber,
+                    c.Content.Length > 500 ? c.Content.Substring(0, 500) + "…" : c.Content,
+                    c.SermonDate, c.SectionTitle))
+                .ToListAsync();
+        }
+
+        return Ok(new { exactMatches, allWordMatches, total = exactMatches.Count + allWordMatches.Count });
     }
 
     // GET /api/search/topics — all distinct section titles from GoK4 with occurrence count

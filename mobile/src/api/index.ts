@@ -33,7 +33,9 @@ export const chatSearch = (question: string) =>
   client.post<ChatResponse>('/search/chat', { question });
 
 export const textSearch = (query: string) =>
-  client.post<{ results: TextSearchResult[] }>('/search/text', { query });
+  client.post<{ exactMatches: TextSearchResult[]; allWordMatches: TextSearchResult[]; total: number }>(
+    '/search/text', { query }
+  );
 
 export const getTopics = () =>
   client.get<{ topics: import('../types').DocTopic[] }>('/search/topics');

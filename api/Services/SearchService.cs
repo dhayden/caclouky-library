@@ -22,7 +22,7 @@ public partial class SearchService
     private static readonly TimeSpan ChunkCacheTtl = TimeSpan.FromMinutes(15);
 
     // Common English stopwords to ignore when extracting keywords
-    private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
     {
         "the","a","an","and","or","but","in","on","at","to","for","of","with","about","is","are",
         "was","were","be","been","have","has","had","do","does","did","will","would","could","should",
