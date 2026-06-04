@@ -17,7 +17,7 @@ public partial class SearchService
     private readonly LibraryDbContext _db;
     private readonly OllamaService _ollama;
     private readonly IMemoryCache _cache;
-    private const int TopK = 4;
+    private const int TopK = 15;
     internal const string ChunkCacheKey = "sermon_chunks";
     private static readonly TimeSpan ChunkCacheTtl = TimeSpan.FromMinutes(15);
 

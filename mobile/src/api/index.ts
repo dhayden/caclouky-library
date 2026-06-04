@@ -35,6 +35,14 @@ export const chatSearch = (question: string) =>
 export const textSearch = (query: string) =>
   client.post<{ results: TextSearchResult[] }>('/search/text', { query });
 
+export const getTopics = () =>
+  client.get<{ topics: import('../types').DocTopic[] }>('/search/topics');
+
+export const getTopicSections = (topic: string) =>
+  client.get<{ results: import('../types').TextSearchResult[]; total: number }>(
+    '/search/topic-sections', { params: { topic } }
+  );
+
 export const getScriptureTeaching = (book: string, chapter: number, verse: number) =>
   client.get<{ reference: string; teaching: string; generatedAt: string; fromStore: boolean }>(
     '/search/scripture-teaching', { params: { book, chapter, verse } }

@@ -108,6 +108,11 @@ export interface SearchHistory {
   createdAt: string;
 }
 
+export interface DocTopic {
+  topic: string;
+  count: number;
+}
+
 export interface UserHighlight {
   id: number;
   sourceType: string;

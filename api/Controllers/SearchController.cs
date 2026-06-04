@@ -88,6 +88,56 @@ public class SearchController : ControllerBase
         return Ok(new { results, total = results.Count });
     }
 
+    // GET /api/search/topics — all distinct section titles from GoK4 with occurrence count
+    [AllowAnonymous]
+    [HttpGet("topics")]
+    public async Task<IActionResult> GetTopics()
+    {
+        var gokId = await _db.PdfDocuments
+            .Where(d => d.IsIndexed && d.FileName.StartsWith("GoK4"))
+            .Select(d => d.Id).FirstOrDefaultAsync();
+
+        if (gokId == 0) return Ok(new { topics = Array.Empty<object>() });
+
+        var topics = await _db.PdfChunks
+            .Where(c => c.DocumentId == gokId && c.SectionTitle != null && c.SectionTitle != "")
+            .GroupBy(c => c.SectionTitle!)
+            .Select(g => new { topic = g.Key, count = g.Count() })
+            .OrderBy(t => t.topic)
+            .ToListAsync();
+
+        return Ok(new { topics });
+    }
+
+    // GET /api/search/topic-sections?topic=Baptism — all GoK4 sections under a topic
+    [AllowAnonymous]
+    [HttpGet("topic-sections")]
+    public async Task<IActionResult> GetTopicSections([FromQuery] string topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic)) return BadRequest("topic is required.");
+
+        var gokId = await _db.PdfDocuments
+            .Where(d => d.IsIndexed && d.FileName.StartsWith("GoK4"))
+            .Select(d => d.Id).FirstOrDefaultAsync();
+
+        if (gokId == 0) return Ok(new { results = Array.Empty<object>() });
+
+        var results = await _db.PdfChunks
+            .Where(c => c.DocumentId == gokId && c.SectionTitle == topic)
+            .OrderBy(c => c.PageNumber)
+            .Select(c => new TextSearchResultDto(
+                "Gospel of the Kingdom",
+                "GoK4.html",
+                c.PageNumber,
+                c.Content.Length > 600 ? c.Content.Substring(0, 600) + "…" : c.Content,
+                c.SermonDate,
+                c.SectionTitle
+            ))
+            .ToListAsync();
+
+        return Ok(new { results, total = results.Count });
+    }
+
     // GET /api/search/scripture-teaching?book=John&chapter=3&verse=16
     // Searches GoK4 HTML chunks for verbatim Sowders teaching on the given verse.
     [AllowAnonymous]

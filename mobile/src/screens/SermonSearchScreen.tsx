@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { SermonStackParamList } from '../navigation/types';
-import type { Citation, TextSearchResult, ScriptureRef, SearchHistory, BibleVerse } from '../types';
+import type { Citation, TextSearchResult, ScriptureRef, SearchHistory, BibleVerse, DocTopic } from '../types';
 import * as api from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -58,7 +58,7 @@ const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD']
 const HIGHLIGHT_LABELS = ['Yellow', 'Green', 'Blue', 'Pink', 'Purple'];
 
 type Props = NativeStackScreenProps<SermonStackParamList, 'SermonSearch'>;
-type SearchMode = 'ai' | 'text';
+type SearchMode = 'ai' | 'text' | 'topics';
 
 interface Message {
   role: 'user' | 'ai';
@@ -90,6 +90,13 @@ export default function SermonSearchScreen({ navigation }: Props) {
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   const [toast, setToast] = useState<string | null>(null);
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set());
+
+  // Topics mode
+  const [topics, setTopics] = useState<DocTopic[]>([]);
+  const [topicsLoaded, setTopicsLoaded] = useState(false);
+  const [topicFilter, setTopicFilter] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [topicSections, setTopicSections] = useState<TextSearchResult[]>([]);
 
   const toggleYear = (year: number) =>
     setCollapsedYears(prev => {
@@ -183,7 +190,43 @@ export default function SermonSearchScreen({ navigation }: Props) {
     setMessages([]);
     setTextResults([]);
     setInput('');
+    setSelectedTopic(null);
+    if (m === 'topics' && !topicsLoaded) loadTopics();
   };
+
+  const loadTopics = async () => {
+    setLoading(true);
+    try {
+      const res = await api.getTopics();
+      setTopics(res.data.topics);
+      setTopicsLoaded(true);
+    } catch {
+      showToast('Could not load topics.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openTopic = async (topic: string) => {
+    setSelectedTopic(topic);
+    setLoading(true);
+    try {
+      const res = await api.getTopicSections(topic);
+      setTopicSections(res.data.results);
+    } catch {
+      setTopicSections([]);
+      showToast('Could not load sections.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredTopics = useMemo(() =>
+    topicFilter.trim()
+      ? topics.filter(t => t.topic.toLowerCase().includes(topicFilter.toLowerCase()))
+      : topics,
+    [topics, topicFilter]
+  );
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
@@ -191,10 +234,13 @@ export default function SermonSearchScreen({ navigation }: Props) {
       {/* Mode toggle */}
       <View style={styles.modeRow}>
         <TouchableOpacity style={[styles.modeBtn, mode === 'ai' && styles.modeBtnActive]} onPress={() => switchMode('ai')}>
-          <Text style={[styles.modeBtnText, mode === 'ai' && styles.modeBtnTextActive]}>🤖 AI Search</Text>
+          <Text style={[styles.modeBtnText, mode === 'ai' && styles.modeBtnTextActive]}>🤖 AI</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.modeBtn, mode === 'text' && styles.modeBtnActive]} onPress={() => switchMode('text')}>
-          <Text style={[styles.modeBtnText, mode === 'text' && styles.modeBtnTextActive]}>🔍 Text Search</Text>
+          <Text style={[styles.modeBtnText, mode === 'text' && styles.modeBtnTextActive]}>🔍 Search</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.modeBtn, mode === 'topics' && styles.modeBtnActive]} onPress={() => switchMode('topics')}>
+          <Text style={[styles.modeBtnText, mode === 'topics' && styles.modeBtnTextActive]}>📚 Topics</Text>
         </TouchableOpacity>
         {user && (
           <TouchableOpacity style={styles.historyBtn} onPress={() => { setHistoryOpen(true); loadHistory(); }}>
@@ -331,7 +377,72 @@ export default function SermonSearchScreen({ navigation }: Props) {
         </ScrollView>
       )}
 
-      <View style={styles.inputRow}>
+      {/* Topics mode */}
+      {mode === 'topics' && (
+        <View style={{ flex: 1 }}>
+          {selectedTopic ? (
+            <>
+              <View style={styles.topicHeader}>
+                <TouchableOpacity onPress={() => setSelectedTopic(null)} style={styles.topicBackBtn}>
+                  <Text style={styles.topicBackText}>‹ Topics</Text>
+                </TouchableOpacity>
+                <Text style={styles.topicHeaderTitle} numberOfLines={1}>{selectedTopic}</Text>
+                <Text style={styles.topicHeaderCount}>{topicSections.length}</Text>
+              </View>
+              <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
+                {loading && <View style={styles.loadingRow}><ActivityIndicator size="small" color={P} /><Text style={styles.loadingText}>Loading…</Text></View>}
+                {topicSections.map((r, i) => {
+                  const dateLabel = r.sermonDate ?? parseSermonDate(r.fileName);
+                  return (
+                    <TouchableOpacity key={i} style={styles.textResult}
+                      onPress={() => navigation.navigate('PdfViewer', { fileName: r.fileName, page: r.pageNumber, title: dateLabel, highlight: r.snippet })}>
+                      <Text style={styles.textResultTitle}>{dateLabel}</Text>
+                      <Text style={styles.textResultSubtitle}>p.{r.pageNumber}</Text>
+                      <Text style={styles.textResultSnippet} numberOfLines={4}>{r.snippet}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              <View style={styles.topicFilterRow}>
+                <TextInput
+                  style={styles.topicFilterInput}
+                  placeholder="Filter topics…"
+                  placeholderTextColor={MUT}
+                  value={topicFilter}
+                  onChangeText={setTopicFilter}
+                />
+                {topicFilter.length > 0 && (
+                  <TouchableOpacity onPress={() => setTopicFilter('')}>
+                    <Text style={{ color: MUT, fontSize: 18, paddingHorizontal: 10 }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {loading
+                ? <ActivityIndicator style={{ marginTop: 40 }} size="large" color={P} />
+                : (
+                  <FlatList
+                    data={filteredTopics}
+                    keyExtractor={t => t.topic}
+                    contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                    ListEmptyComponent={<Text style={[styles.suggestionsLabel, { marginTop: 24 }]}>{topicsLoaded ? 'No topics found.' : 'Loading topics…'}</Text>}
+                    renderItem={({ item: t }) => (
+                      <TouchableOpacity style={styles.topicRow} onPress={() => openTopic(t.topic)}>
+                        <Text style={styles.topicName}>{t.topic}</Text>
+                        <View style={styles.topicBadge}><Text style={styles.topicBadgeText}>{t.count}</Text></View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                )
+              }
+            </>
+          )}
+        </View>
+      )}
+
+      {mode !== 'topics' && <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
           placeholder={mode === 'ai' ? 'Ask a question about the sermons…' : 'Search sermon text…'}
@@ -342,7 +453,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
         <TouchableOpacity style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]} onPress={() => send(input)} disabled={!input.trim() || loading}>
           <Text style={styles.sendIcon}>➤</Text>
         </TouchableOpacity>
-      </View>
+      </View>}
 
       {/* History modal */}
       <Modal visible={historyOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setHistoryOpen(false)}>
@@ -514,6 +625,17 @@ const styles = StyleSheet.create({
   actionBtn: { backgroundColor: '#EEF2FB', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#C8D4F0' },
   actionBtnText: { fontSize: 12, color: P, fontWeight: '600' },
   resultCount: { fontSize: 12, color: MUT, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 14 },
+  topicFilterRow: { flexDirection: 'row', alignItems: 'center', margin: 12, borderWidth: 1.5, borderColor: BRD, borderRadius: 22, backgroundColor: SRF, paddingHorizontal: 14 },
+  topicFilterInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: TXT },
+  topicRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: BRD },
+  topicName: { flex: 1, fontSize: 15, color: TXT, fontWeight: '500', marginRight: 12 },
+  topicBadge: { backgroundColor: BRD, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
+  topicBadgeText: { fontSize: 12, fontWeight: '700', color: MUT },
+  topicHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: BRD, backgroundColor: SRF, gap: 10 },
+  topicBackBtn: { paddingHorizontal: 4 },
+  topicBackText: { color: P, fontSize: 16, fontWeight: '600' },
+  topicHeaderTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: TXT },
+  topicHeaderCount: { fontSize: 12, fontWeight: '700', color: MUT, backgroundColor: BRD, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   yearHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, marginBottom: 6, borderBottomWidth: 2, borderBottomColor: P },
   yearHeaderText: { fontSize: 16, fontWeight: '800', color: P },
   yearHeaderCount: { fontSize: 12, fontWeight: '700', color: MUT, backgroundColor: BRD, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
