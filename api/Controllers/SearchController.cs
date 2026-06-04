@@ -53,9 +53,11 @@ public class SearchController : ControllerBase
 
         if (terms.Length == 0) return BadRequest("No searchable terms.");
 
+        // GoK files are used for AI search and scripture teaching — exclude from keyword search
+        // so individual dated sermon PDFs are not buried by a single large document.
         var query = _db.PdfChunks
             .Include(c => c.Document)
-            .Where(c => c.Document.IsIndexed);
+            .Where(c => c.Document.IsIndexed && !c.Document.FileName.StartsWith("GoK"));
 
         foreach (var term in terms)
         {
@@ -63,9 +65,10 @@ public class SearchController : ControllerBase
             query = query.Where(c => EF.Functions.Like(c.Content, $"%{t}%"));
         }
 
-        var results = await query
-            .OrderBy(c => c.Document.Title).ThenBy(c => c.PageNumber)
-            .Take(20)
+        // Fetch candidates, then limit to 5 per document so no single sermon dominates
+        var candidates = await query
+            .OrderBy(c => c.Document.FileName).ThenBy(c => c.PageNumber)
+            .Take(200)
             .Select(c => new TextSearchResultDto(
                 c.Document.Title,
                 c.Document.FileName,
@@ -76,7 +79,12 @@ public class SearchController : ControllerBase
             ))
             .ToListAsync();
 
-        return Ok(new { results });
+        var results = candidates
+            .GroupBy(r => r.FileName)
+            .SelectMany(g => g.Take(5))
+            .ToList();
+
+        return Ok(new { results, total = results.Count });
     }
 
     // GET /api/search/scripture-teaching?book=John&chapter=3&verse=16

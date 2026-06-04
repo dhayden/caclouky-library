@@ -141,7 +141,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
     if (user) api.saveSearchHistory(query, 'sermon').then(loadHistory);
     try {
       const res = await api.textSearch(query);
-      setTextResults(res.data.results);
+      setTextResults(res.data.results ?? []);
       setLastTextQuery(query);
     } catch {
       setTextResults([]);
