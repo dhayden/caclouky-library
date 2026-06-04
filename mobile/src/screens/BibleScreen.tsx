@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Modal, ScrollView,
+  ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import type { BibleVerse } from '../types';
 import * as api from '../api';
@@ -440,7 +440,7 @@ export default function BibleScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: c.background }]}>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: c.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={90}>
       {/* Toast */}
       {toast && (
         <View style={[styles.toast, { backgroundColor: toast.error ? '#B71C1C' : '#1A1A2E' }]}>
@@ -549,7 +549,7 @@ export default function BibleScreen() {
       </Modal>
 
       <VerseChooser visible={chooserOpen} selectedBook={selectedBook} chapter={chapter} onNavigate={handleNavigate} onClose={() => setChooserOpen(false)} />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   panelVerseText: { paddingHorizontal: 16, lineHeight: 28, fontStyle: 'italic' },
   panelNoteForm: { paddingHorizontal: 12, gap: 8 },
   panelInput: { borderWidth: 1, borderRadius: 8, padding: 10 },
-  panelInputMulti: { minHeight: 120, textAlignVertical: 'top' },
+  panelInputMulti: { minHeight: 180, textAlignVertical: 'top' },
   panelSaveBtn: { borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 4 },
   panelSaveBtnText: { color: '#fff', fontWeight: 'bold' },
   panelSowders: { paddingHorizontal: 16 },

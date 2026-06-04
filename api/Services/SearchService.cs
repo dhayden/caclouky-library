@@ -138,7 +138,8 @@ public partial class SearchService
         var contextChunks = scored.Select((c, i) =>
             $"[Source {i + 1}: {c.DocumentTitle}, Page {c.PageNumber}]\n{c.Content}");
 
-        var answer = await _ollama.GetAnswerAsync(question, contextChunks);
+        var rawAnswer = await _ollama.GetAnswerAsync(question, contextChunks);
+        var (answer, scriptures) = ParseAnswer(rawAnswer);
 
         // 5. Deduplicate citations (include snippet and metadata for viewer highlighting)
         var citations = scored
@@ -148,7 +149,7 @@ public partial class SearchService
             .DistinctBy(c => (c.DocumentTitle, c.PageNumber))
             .ToList();
 
-        return new SearchResult(answer, citations, []);
+        return new SearchResult(answer, citations, scriptures);
     }
 
     private static (string Answer, List<ScriptureRef> Scriptures) ParseAnswer(string raw)

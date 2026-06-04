@@ -49,6 +49,7 @@ public class OllamaService
             - Do NOT attribute teachings to other named individuals in the transcripts.
             - If the source material does not contain Bro. Sowders' teaching on the topic, say so clearly — do not guess or invent.
             - Be thorough but concise. Quote directly from the source when it strengthens the answer.
+            - After your answer, add a line "SCRIPTURES:" followed by a list of every Bible reference mentioned in your answer (one per line, e.g. "John 3:16"). If none, write "SCRIPTURES: none".
 
             SOURCE MATERIAL:
             {context}
