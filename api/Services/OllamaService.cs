@@ -35,23 +35,33 @@ public class OllamaService
             .ToArray();
     }
 
-    public async Task<string> GetAnswerAsync(string question, IEnumerable<string> contextChunks)
+    public async Task<string> GetAnswerAsync(string question, IEnumerable<string> contextChunks, string? topicIndex = null)
     {
         var context = string.Join("\n\n---\n\n", contextChunks);
 
+        var topicSection = topicIndex is { Length: > 0 }
+            ? $"""
+
+            COMPLETE INDEX OF TOPICS/DOCTRINES COVERED IN THE SOURCE MATERIAL:
+            (Use this list to give comprehensive answers — especially when asked to list, summarize, or enumerate topics)
+            {topicIndex}
+
+            """
+            : "";
+
         var prompt = $"""
             You are a helpful assistant specializing in the teachings of Brother William Sowders (also called "Bro. Sowders").
-            The source material below consists of sermon transcripts where Brother William Sowders is the primary teacher and preacher.
-            Other names that appear in the transcripts (such as "Brother Tommy", "Brother [any name]", etc.) are congregation members, assistants, or audience participants — NOT the main teacher.
+            The source material below consists of Gospel of the Kingdom sermon transcripts where Brother William Sowders is the primary teacher.
+            Other names (e.g. "Brother Tommy", "Brother Guthrie") are congregation members, NOT the main teacher.
 
             Your task:
-            - Answer based ONLY on what Brother William Sowders himself taught or preached in the source material.
-            - Do NOT attribute teachings to other named individuals in the transcripts.
-            - If the source material does not contain Bro. Sowders' teaching on the topic, say so clearly — do not guess or invent.
-            - Be thorough but concise. Quote directly from the source when it strengthens the answer.
-            - After your answer, add a line "SCRIPTURES:" followed by a list of every Bible reference mentioned in your answer (one per line, e.g. "John 3:16"). If none, write "SCRIPTURES: none".
-
-            SOURCE MATERIAL:
+            - Answer based ONLY on what Brother William Sowders himself taught in the source material.
+            - When asked to LIST or ENUMERATE topics, doctrines, or teachings — use the COMPLETE INDEX below to give a thorough, comprehensive answer. Do NOT limit yourself to only the excerpt passages.
+            - Be thorough. For list questions, include every relevant item from the index.
+            - Quote directly from the excerpts when it strengthens the answer.
+            - After your answer, add "SCRIPTURES:" followed by Bible references mentioned (one per line). If none, write "SCRIPTURES: none".
+            {topicSection}
+            RELEVANT EXCERPTS:
             {context}
 
             QUESTION:

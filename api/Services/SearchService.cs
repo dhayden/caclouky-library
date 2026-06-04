@@ -105,10 +105,39 @@ public partial class SearchService
         return await AskAsync(question, chunks);
     }
 
+    // Detects queries that want a comprehensive list of all topics/doctrines
+    private static bool IsListAllQuery(string q) =>
+        Regex.IsMatch(q, @"\b(list|enumerate|all|every|comprehensive|overview|summarize)\b", RegexOptions.IgnoreCase) &&
+        Regex.IsMatch(q, @"\b(doctrine|doctrines|topic|topics|teaching|teachings|subject|subjects|preach|taught|covered|discuss)\b", RegexOptions.IgnoreCase);
+
     public async Task<SearchResult> AskAsync(string question, IReadOnlyList<PreloadedChunk> preloadedChunks)
     {
         if (preloadedChunks.Count == 0)
             return new SearchResult("No sermon documents have been indexed yet. Please ask an admin to upload and index the PDF files.", [], []);
+
+        // For "list all doctrines/topics" queries, bypass the LLM and return the full topic index directly
+        if (IsListAllQuery(question))
+        {
+            var allTopics = preloadedChunks
+                .Where(c => c.SectionTitle is { Length: > 0 })
+                .Select(c => c.SectionTitle!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t)
+                .ToList();
+
+            if (allTopics.Count > 0)
+            {
+                var grouped = allTopics
+                    .GroupBy(t => char.ToUpper(t[0]).ToString())
+                    .OrderBy(g => g.Key);
+
+                var body = string.Join("\n\n", grouped.Select(g =>
+                    $"**{g.Key}**\n" + string.Join("\n", g.Select(t => $"  • {t}"))));
+
+                var listAnswer = $"Here is a complete list of all topics and doctrines covered in Bro. Sowders' Gospel of the Kingdom Papers ({allTopics.Count} distinct topics):\n\n{body}";
+                return new SearchResult(listAnswer, [], []);
+            }
+        }
 
         // 1. Embed the question locally via Ollama
         var questionEmbedding = await _ollama.GetEmbeddingAsync(question);
@@ -134,11 +163,20 @@ public partial class SearchService
             .Take(TopK)
             .ToList();
 
-        // 4. Build context and get answer from Ollama
-        var contextChunks = scored.Select((c, i) =>
-            $"[Source {i + 1}: {c.DocumentTitle}, Page {c.PageNumber}]\n{c.Content}");
+        // 4. Build topic index from all GoK4 chunks (gives model full doctrine overview)
+        var topicIndex = preloadedChunks
+            .Where(c => c.SectionTitle != null && c.SectionTitle.Length > 0)
+            .Select(c => c.SectionTitle!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t)
+            .Select(t => $"• {t}");
+        var topicIndexStr = string.Join("\n", topicIndex);
 
-        var rawAnswer = await _ollama.GetAnswerAsync(question, contextChunks);
+        // 5. Build context excerpts and get answer from Ollama
+        var contextChunks = scored.Select((c, i) =>
+            $"[Source {i + 1}: {c.SermonDate ?? c.DocumentTitle}, {c.SectionTitle ?? ""}]\n{c.Content}");
+
+        var rawAnswer = await _ollama.GetAnswerAsync(question, contextChunks, topicIndexStr);
         var (answer, scriptures) = ParseAnswer(rawAnswer);
 
         // 5. Deduplicate citations (include snippet and metadata for viewer highlighting)
