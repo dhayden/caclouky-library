@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, TextInput,
   ScrollView, Alert, ActivityIndicator, NativeSyntheticEvent, TextInputSelectionChangeEventData,
+  Share,
 } from 'react-native';
 import * as api from '../api';
 import type { NoteFolder, UserNote } from '../types';
@@ -302,9 +303,14 @@ export default function NotesScreen() {
                     {n.sourceType === 'bible' ? '📖' : '📜'} {n.sourceRef}
                   </Text>
                 )}
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteNote(n.id)}>
-                  <Text style={styles.deleteBtnText}>Delete</Text>
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity onPress={() => Share.share({ title: n.title, message: `${n.title}\n\n${n.content}${n.sourceRef ? `\n\n— ${n.sourceRef}` : ''}` })}>
+                    <Text style={styles.exportBtnText}>Share / Print</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => deleteNote(n.id)}>
+                    <Text style={styles.deleteBtnText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
               </TouchableOpacity>
             );
           }}
@@ -447,6 +453,8 @@ const styles = StyleSheet.create({
   cardDate: { marginLeft: 8 },
   cardContent: { lineHeight: 23 },
   cardRef: { marginTop: 10 },
+  cardActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
+  exportBtnText: { fontSize: 13, color: '#1976d2' },
   deleteBtn: { marginTop: 14, alignSelf: 'flex-end' },
   deleteBtnText: { fontSize: 13, color: '#d32f2f' },
   empty: { textAlign: 'center', marginTop: 60 },

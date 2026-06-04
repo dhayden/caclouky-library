@@ -24,7 +24,10 @@ function extractSortKey(fileName: string): number {
 }
 
 function parseSermonDate(fileName: string): string {
-  // YYMMDD format: 440818 → August 18, 1944
+  // Ministers' Digest: YYMD## → "Ministers' Digest #N, 19YY"
+  const md = fileName.match(/^(\d{2})MD(\d{2})/i);
+  if (md) return `Ministers' Digest #${parseInt(md[2])}, 19${md[1]}`;
+  // Regular sermon: YYMMDD → "Month Day, Year"
   const m = fileName.match(/^(\d{2})(\d{2})(\d{2})/);
   if (m) {
     const year = `19${m[1]}`;
@@ -33,8 +36,7 @@ function parseSermonDate(fileName: string): string {
     if (!month) return year;
     return day > 0 ? `${month} ${day}, ${year}` : `${month} ${year}`;
   }
-  if (fileName.startsWith('GoK'))  return 'Gospel of the Kingdom';
-  if (fileName.includes('MD'))     return 'Ministers\' Digest';
+  if (fileName.startsWith('GoK')) return 'Gospel of the Kingdom';
   return fileName;
 }
 
@@ -87,6 +89,14 @@ export default function SermonSearchScreen({ navigation }: Props) {
   const [noteModal, setNoteModal] = useState<{ prefill: string } | null>(null);
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   const [toast, setToast] = useState<string | null>(null);
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set());
+
+  const toggleYear = (year: number) =>
+    setCollapsedYears(prev => {
+      const next = new Set(prev);
+      next.has(year) ? next.delete(year) : next.add(year);
+      return next;
+    });
   const scrollRef = useRef<ScrollView>(null);
 
   const showToast = (msg: string) => {
@@ -235,7 +245,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
                 <View style={styles.citationsBox}>
                   <Text style={styles.citationsLabel}>Sources:</Text>
                   {msg.citations.map((c, j) => {
-                    const dateLabel = c.sermonDate ?? parseSermonDate(c.documentTitle);
+                    const dateLabel = c.sermonDate ?? parseSermonDate(c.fileName);
                     const label = c.sectionTitle ? `${dateLabel} — ${c.sectionTitle}` : dateLabel;
                     return (
                       <TouchableOpacity key={j} onPress={() => navigation.navigate('PdfViewer', {
@@ -289,13 +299,18 @@ export default function SermonSearchScreen({ navigation }: Props) {
               {textResults.length} result{textResults.length !== 1 ? 's' : ''} for "{lastTextQuery}"
             </Text>
           )}
-          {groupedResults.map(([year, results]) => (
+          {groupedResults.map(([year, results]) => {
+            const collapsed = collapsedYears.has(year);
+            return (
             <View key={year}>
-              <View style={styles.yearHeader}>
+              <TouchableOpacity style={styles.yearHeader} onPress={() => toggleYear(year)} activeOpacity={0.7}>
                 <Text style={styles.yearHeaderText}>{year === 9999 ? 'Unknown Date' : year}</Text>
-                <Text style={styles.yearHeaderCount}>{results.length}</Text>
-              </View>
-              {results.map((r, i) => {
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.yearHeaderCount}>{results.length}</Text>
+                  <Text style={{ color: P, fontSize: 15, fontWeight: '700' }}>{collapsed ? '▶' : '▼'}</Text>
+                </View>
+              </TouchableOpacity>
+              {!collapsed && results.map((r, i) => {
                 const dateLabel = r.sermonDate ?? parseSermonDate(r.fileName);
                 const titleLabel = r.sectionTitle ? `${dateLabel} — ${r.sectionTitle}` : dateLabel;
                 return (
@@ -311,7 +326,8 @@ export default function SermonSearchScreen({ navigation }: Props) {
                 );
               })}
             </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
 

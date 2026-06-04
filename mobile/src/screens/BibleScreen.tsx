@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import type { BibleVerse } from '../types';
+import type { BibleVerse, UserNote, ScriptureRef } from '../types';
 import * as api from '../api';
 import { useDisplay } from '../context/DisplayContext';
 
@@ -14,6 +14,7 @@ interface ExpandedState {
   tab: VerseTab;
   noteTitle: string;
   noteContent: string;
+  editNoteId: number | null;
   savingNote: boolean;
   sowdersText: string;
   sowdersLoading: boolean;
@@ -256,6 +257,36 @@ const HIGHLIGHT_COLORS = [
   { color: '#e040fb', label: 'Purple' },
 ];
 
+// ── Inline scripture ref parsing for Sowders viewer ──────────────────────────
+
+const KNOWN_BOOK_WORDS = new Set(
+  [...OT_BOOKS, ...NT_BOOKS, 'Psalm'].flatMap(b => b.split(' '))
+);
+
+type InlineSeg = { type: 'text'; value: string } | { type: 'ref'; value: string; ref: ScriptureRef };
+
+function parseInlineRefs(text: string): InlineSeg[] {
+  const pat = /\b((?:[123]\s)?[A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?/g;
+  const segs: InlineSeg[] = [];
+  let last = 0; let m: RegExpExecArray | null;
+  while ((m = pat.exec(text)) !== null) {
+    const bookName = m[1].trim();
+    const lastWord = bookName.split(' ').pop() ?? '';
+    if (!KNOWN_BOOK_WORDS.has(lastWord)) continue;
+    if (m.index > last) segs.push({ type: 'text', value: text.slice(last, m.index) });
+    const chapter = parseInt(m[2]);
+    const vStart = m[3] ? parseInt(m[3]) : 1;
+    const vEnd = m[4] ? parseInt(m[4]) : vStart;
+    const reference = m[3]
+      ? (vStart === vEnd ? `${bookName} ${chapter}:${vStart}` : `${bookName} ${chapter}:${vStart}-${vEnd}`)
+      : `${bookName} ${chapter}`;
+    segs.push({ type: 'ref', value: m[0], ref: { reference, book: bookName, chapter, verseStart: vStart, verseEnd: vEnd } });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segs.push({ type: 'text', value: text.slice(last) });
+  return segs;
+}
+
 // ── Main BibleScreen ──────────────────────────────────────────────────────────
 
 export default function BibleScreen() {
@@ -276,11 +307,12 @@ export default function BibleScreen() {
 
   // Highlights + notes
   const [highlights, setHighlights] = useState<Record<string, { id: number; color: string }>>({});
-  const [notedRefs, setNotedRefs] = useState<Set<string>>(new Set());
+  const [notedNotes, setNotedNotes] = useState<Record<string, UserNote>>({});
   const [highlightTarget, setHighlightTarget] = useState<BibleVerse | null>(null);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
   const [sowdersViewer, setSowdersViewer] = useState<{ label: string; content: string } | null>(null);
   const [sowdersHighlightTarget, setSowdersHighlightTarget] = useState<string | null>(null);
+  const [scripturePopup, setScripturePopup] = useState<{ ref: ScriptureRef; verses: BibleVerse[] } | null>(null);
 
   const showToast = (msg: string, error = false) => {
     setToast({ msg, error });
@@ -298,10 +330,10 @@ export default function BibleScreen() {
     }).catch(() => {});
 
     api.getNotes().then(r => {
-      const refs = new Set(
-        r.data.filter(n => n.sourceType === 'bible' && n.sourceRef).map(n => n.sourceRef!)
-      );
-      setNotedRefs(refs);
+      const map: Record<string, UserNote> = {};
+      r.data.filter(n => n.sourceType === 'bible' && n.sourceRef)
+            .forEach(n => { map[n.sourceRef!] = n; });
+      setNotedNotes(map);
     }).catch(() => {});
   }, []);
 
@@ -349,12 +381,22 @@ export default function BibleScreen() {
 
   const toggleVerse = (v: BibleVerse) => {
     if (expanded?.verseId === v.id) setExpanded(null);
-    else setExpanded({ verseId: v.id, tab: 'verse', noteTitle: '', noteContent: '', savingNote: false, sowdersText: '', sowdersLoading: false });
+    else setExpanded({ verseId: v.id, tab: 'verse', noteTitle: '', noteContent: '', editNoteId: null, savingNote: false, sowdersText: '', sowdersLoading: false });
   };
 
   const setTab = (tab: VerseTab, verse: BibleVerse) => {
-    setExpanded(e => e ? { ...e, tab } : null);
-    if (tab === 'sowders' && !expanded?.sowdersText && !expanded?.sowdersLoading) loadSowders(verse);
+    if (tab === 'note') {
+      const ref = verseRef(verse);
+      const existing = notedNotes[ref];
+      setExpanded(e => e ? { ...e, tab: 'note',
+        noteTitle: existing?.title ?? '',
+        noteContent: existing?.content ?? '',
+        editNoteId: existing?.id ?? null,
+      } : null);
+    } else {
+      setExpanded(e => e ? { ...e, tab } : null);
+      if (tab === 'sowders' && !expanded?.sowdersText && !expanded?.sowdersLoading) loadSowders(verse);
+    }
   };
 
   const parseSections = (text: string): { label: string; content: string }[] =>
@@ -380,10 +422,13 @@ export default function BibleScreen() {
     setExpanded(e => e ? { ...e, savingNote: true } : null);
     try {
       const ref = verseRef(verse);
-      await api.createNote({ title: expanded.noteTitle, content: expanded.noteContent, sourceType: 'bible', sourceRef: ref });
-      setNotedRefs(prev => new Set([...prev, ref]));
+      const data = { title: expanded.noteTitle, content: expanded.noteContent, sourceType: 'bible', sourceRef: ref };
+      const saved = expanded.editNoteId
+        ? (await api.updateNote(expanded.editNoteId, data)).data
+        : (await api.createNote(data)).data;
+      setNotedNotes(prev => ({ ...prev, [ref]: saved }));
       showToast('Note saved.');
-      setExpanded(e => e ? { ...e, noteTitle: '', noteContent: '', savingNote: false, tab: 'verse' } : null);
+      setExpanded(e => e ? { ...e, noteTitle: '', noteContent: '', editNoteId: null, savingNote: false, tab: 'verse' } : null);
     } catch {
       showToast('Could not save note.', true);
       setExpanded(e => e ? { ...e, savingNote: false } : null);
@@ -400,6 +445,15 @@ export default function BibleScreen() {
       setHighlights(prev => ({ ...prev, [ref]: { id: res.data.id, color } }));
     } catch { showToast('Could not save highlight.', true); }
     setHighlightTarget(null);
+  };
+
+  const openScriptureInViewer = async (ref: ScriptureRef) => {
+    try {
+      const res = await api.getBibleVerses(ref.book, ref.chapter, ref.verseStart, ref.verseEnd);
+      setScripturePopup({ ref, verses: res.data });
+    } catch {
+      setScripturePopup({ ref, verses: [] });
+    }
   };
 
   const removeHighlight = async () => {
@@ -425,7 +479,7 @@ export default function BibleScreen() {
           {(['verse', 'note', 'sowders'] as VerseTab[]).map(tab => (
             <TouchableOpacity key={tab} style={[styles.panelTab, e.tab === tab && { borderBottomColor: c.primary, borderBottomWidth: 2 }]} onPress={() => setTab(tab, verse)}>
               <Text style={[styles.panelTabText, { color: e.tab === tab ? c.primary : c.textMuted, fontSize: f.label }]}>
-                {tab === 'verse' ? 'Verse' : tab === 'note' ? '+ Note' : 'Bro. Sowders'}
+                {tab === 'verse' ? 'Verse' : tab === 'note' ? (e.editNoteId ? 'Edit Note' : '+ Note') : 'Bro. Sowders'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -513,7 +567,7 @@ export default function BibleScreen() {
             const isExpanded = expanded?.verseId === v.id;
             const ref = verseRef(v);
             const highlight = highlights[ref];
-            const hasNote = notedRefs.has(ref);
+            const hasNote = ref in notedNotes;
             return (
               <View>
                 <TouchableOpacity
@@ -568,6 +622,29 @@ export default function BibleScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Scripture reference popup (used from Sowders viewer) */}
+      <Modal visible={!!scripturePopup} transparent animationType="fade" onRequestClose={() => setScripturePopup(null)}>
+        <View style={styles.scriptureOverlay}>
+          <View style={[styles.scripturePopupCard, { backgroundColor: c.surface }]}>
+            <Text style={[styles.scripturePopupTitle, { color: c.primary }]}>{scripturePopup?.ref.reference}</Text>
+            <ScrollView style={styles.scripturePopupScroll}>
+              {scripturePopup?.verses.length === 0
+                ? <Text style={{ color: c.textMuted }}>Verse not found.</Text>
+                : scripturePopup?.verses.map(v => (
+                    <View key={v.id} style={styles.scripturePopupVerseRow}>
+                      <Text style={[styles.scripturePopupVerseNum, { color: c.primary }]}>{v.verse}</Text>
+                      <Text style={[styles.scripturePopupVerseText, { color: c.textPrimary }]}>{v.text}</Text>
+                    </View>
+                  ))
+              }
+            </ScrollView>
+            <TouchableOpacity style={[styles.scripturePopupClose, { backgroundColor: c.primary }]} onPress={() => setScripturePopup(null)}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Sowders section viewer */}
       <Modal visible={!!sowdersViewer} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSowdersViewer(null)}>
         <View style={[styles.sowdersModal, { backgroundColor: c.background }]}>
@@ -578,7 +655,14 @@ export default function BibleScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.sowdersModalScroll} contentContainerStyle={styles.sowdersModalContent}>
-            <Text selectable style={[styles.sowdersModalText, { color: c.textPrimary }]}>{sowdersViewer?.content}</Text>
+            <Text style={[styles.sowdersModalText, { color: c.textPrimary }]}>
+              {parseInlineRefs(sowdersViewer?.content ?? '').map((seg, i) =>
+                seg.type === 'ref'
+                  ? <Text key={i} style={{ color: c.primary, textDecorationLine: 'underline' }}
+                      onPress={() => openScriptureInViewer(seg.ref)}>{seg.value}</Text>
+                  : <Text key={i}>{seg.value}</Text>
+              )}
+            </Text>
           </ScrollView>
           {sowdersHighlightTarget === null && (
             <View style={[styles.sowdersModalFooter, { borderTopColor: c.border, backgroundColor: c.surface }]}>
@@ -689,4 +773,13 @@ const styles = StyleSheet.create({
   sowdersColorSwatch: { width: 52, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sowdersColorLabel: { fontSize: 10, fontWeight: '700', color: '#333' },
   sowdersColorCancel: { fontSize: 14, paddingHorizontal: 8, paddingVertical: 10 },
+  // Scripture reference popup
+  scriptureOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  scripturePopupCard: { borderRadius: 16, padding: 22, width: '100%', maxHeight: '70%', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, elevation: 10 },
+  scripturePopupTitle: { fontSize: 18, fontWeight: '700', marginBottom: 14 },
+  scripturePopupScroll: { maxHeight: 280 },
+  scripturePopupVerseRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  scripturePopupVerseNum: { fontSize: 12, fontWeight: '700', minWidth: 22, marginTop: 3 },
+  scripturePopupVerseText: { fontSize: 15, lineHeight: 24, flex: 1 },
+  scripturePopupClose: { marginTop: 18, borderRadius: 10, padding: 13, alignItems: 'center' },
 });

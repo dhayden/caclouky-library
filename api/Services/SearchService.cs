@@ -155,23 +155,65 @@ public partial class SearchService
     private static (string Answer, List<ScriptureRef> Scriptures) ParseAnswer(string raw)
     {
         var idx = raw.IndexOf("SCRIPTURES:", StringComparison.OrdinalIgnoreCase);
-        if (idx < 0) return (raw.Trim(), []);
 
-        var answer         = raw[..idx].Trim();
-        var scriptureBlock = raw[(idx + "SCRIPTURES:".Length)..].Trim();
-
+        string answer;
         var refs = new List<ScriptureRef>();
-        foreach (var line in scriptureBlock.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var trimmed = line.Trim().TrimStart('-', '*', '•').Trim();
-            if (string.IsNullOrEmpty(trimmed) || trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
-                continue;
 
-            var parsed = TryParseRef(trimmed);
-            if (parsed != null) refs.Add(parsed);
+        if (idx >= 0)
+        {
+            answer = raw[..idx].Trim();
+            var block = raw[(idx + "SCRIPTURES:".Length)..].Trim();
+            foreach (var line in block.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var trimmed = line.Trim().TrimStart('-', '*', '•').Trim();
+                if (!string.IsNullOrEmpty(trimmed) && !trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parsed = TryParseRef(trimmed);
+                    if (parsed != null) refs.Add(parsed);
+                }
+            }
+        }
+        else
+        {
+            answer = raw.Trim();
         }
 
-        return (answer, refs);
+        // Fallback: scan the full answer text for inline scripture references
+        if (refs.Count == 0)
+            refs = ExtractInlineRefs(answer);
+
+        return (answer, refs.DistinctBy(r => r.Reference).ToList());
+    }
+
+    // Known Bible book names used to validate inline ref matches
+    private static readonly HashSet<string> BibleBooks = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth",
+        "Samuel","Kings","Chronicles","Ezra","Nehemiah","Esther","Job","Psalm","Psalms",
+        "Proverbs","Ecclesiastes","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel",
+        "Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah",
+        "Haggai","Zechariah","Malachi","Matthew","Mark","Luke","John","Acts","Romans",
+        "Corinthians","Galatians","Ephesians","Philippians","Colossians","Thessalonians",
+        "Timothy","Titus","Philemon","Hebrews","James","Peter","Jude","Revelation",
+        "Song","Solomon",
+    };
+
+    [GeneratedRegex(@"(?<![A-Za-z])((?:[123]\s)?[A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?(?![A-Za-z])")]
+    private static partial Regex InlineRefPattern();
+
+    private static List<ScriptureRef> ExtractInlineRefs(string text)
+    {
+        var refs = new List<ScriptureRef>();
+        foreach (Match m in InlineRefPattern().Matches(text))
+        {
+            var book = m.Groups[1].Value.Trim();
+            // Validate the last word of the book name is a known Bible book word
+            var lastWord = book.Split(' ')[^1];
+            if (!BibleBooks.Contains(lastWord)) continue;
+            var parsed = TryParseRef(m.Value.Trim());
+            if (parsed != null) refs.Add(parsed);
+        }
+        return refs;
     }
 
     [GeneratedRegex(@"^((?:\d\s)?[A-Za-z]+(?:\s[A-Za-z]+)?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?")]
