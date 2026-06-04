@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList,
@@ -11,6 +11,17 @@ import { useAuth } from '../context/AuthContext';
 
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
+
+function extractYear(fileName: string, sermonDate?: string | null): number {
+  if (sermonDate) { const m = sermonDate.match(/\d{4}/); if (m) return parseInt(m[0]); }
+  const m = fileName.match(/^(\d{2})/);
+  return m ? 1900 + parseInt(m[1]) : 9999;
+}
+
+function extractSortKey(fileName: string): number {
+  const m = fileName.match(/^(\d{6})/);
+  return m ? parseInt(m[1]) : 999999;
+}
 
 function parseSermonDate(fileName: string): string {
   // YYMMDD format: 440818 → August 18, 1944
@@ -132,6 +143,18 @@ export default function SermonSearchScreen({ navigation }: Props) {
 
   const send = (q: string) => mode === 'ai' ? sendAi(q) : sendText(q);
 
+  const groupedResults = useMemo(() => {
+    if (!textResults.length) return [];
+    const sorted = [...textResults].sort((a, b) => extractSortKey(a.fileName) - extractSortKey(b.fileName));
+    const map = new Map<number, typeof textResults>();
+    for (const r of sorted) {
+      const yr = extractYear(r.fileName, r.sermonDate);
+      if (!map.has(yr)) map.set(yr, []);
+      map.get(yr)!.push(r);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  }, [textResults]);
+
   const openScripture = async (ref: ScriptureRef) => {
     try {
       const res = await api.getBibleVerses(ref.book, ref.chapter, ref.verseStart, ref.verseEnd);
@@ -249,7 +272,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
         </ScrollView>
       )}
 
-      {/* Text mode: results list */}
+      {/* Text mode: grouped results */}
       {mode === 'text' && (
         <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
           {!loading && textResults.length === 0 && (
@@ -261,21 +284,34 @@ export default function SermonSearchScreen({ navigation }: Props) {
               <Text style={styles.loadingText}>Searching…</Text>
             </View>
           )}
-          {textResults.map((r, i) => {
-            const dateLabel = r.sermonDate ?? parseSermonDate(r.documentTitle);
-            const titleLabel = r.sectionTitle ? `${dateLabel} — ${r.sectionTitle}` : dateLabel;
-            return (
-            <TouchableOpacity key={i} style={styles.textResult}
-              onPress={() => navigation.navigate('PdfViewer', {
-                fileName: r.fileName, page: r.pageNumber,
-                title: titleLabel, highlight: r.snippet,
-              })}>
-              <Text style={styles.textResultTitle}>{titleLabel}</Text>
-              <Text style={styles.textResultSubtitle}>p.{r.pageNumber} · {r.fileName}</Text>
-              <HighlightedSnippet text={r.snippet} query={lastTextQuery} />
-            </TouchableOpacity>
-            );
-          })}
+          {!loading && textResults.length > 0 && (
+            <Text style={styles.resultCount}>
+              {textResults.length} result{textResults.length !== 1 ? 's' : ''} for "{lastTextQuery}"
+            </Text>
+          )}
+          {groupedResults.map(([year, results]) => (
+            <View key={year}>
+              <View style={styles.yearHeader}>
+                <Text style={styles.yearHeaderText}>{year === 9999 ? 'Unknown Date' : year}</Text>
+                <Text style={styles.yearHeaderCount}>{results.length}</Text>
+              </View>
+              {results.map((r, i) => {
+                const dateLabel = r.sermonDate ?? parseSermonDate(r.fileName);
+                const titleLabel = r.sectionTitle ? `${dateLabel} — ${r.sectionTitle}` : dateLabel;
+                return (
+                  <TouchableOpacity key={i} style={styles.textResult}
+                    onPress={() => navigation.navigate('PdfViewer', {
+                      fileName: r.fileName, page: r.pageNumber,
+                      title: titleLabel, highlight: r.snippet,
+                    })}>
+                    <Text style={styles.textResultTitle}>{titleLabel}</Text>
+                    <Text style={styles.textResultSubtitle}>p.{r.pageNumber} · {r.fileName}</Text>
+                    <HighlightedSnippet text={r.snippet} query={lastTextQuery} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
         </ScrollView>
       )}
 
@@ -461,6 +497,10 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 4 },
   actionBtn: { backgroundColor: '#EEF2FB', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#C8D4F0' },
   actionBtnText: { fontSize: 12, color: P, fontWeight: '600' },
+  resultCount: { fontSize: 12, color: MUT, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 14 },
+  yearHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, marginBottom: 6, borderBottomWidth: 2, borderBottomColor: P },
+  yearHeaderText: { fontSize: 16, fontWeight: '800', color: P },
+  yearHeaderCount: { fontSize: 12, fontWeight: '700', color: MUT, backgroundColor: BRD, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   textResult: { backgroundColor: SRF, borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: BRD, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
   textResultTitle: { fontSize: 14, fontWeight: '700', color: P, marginBottom: 2 },
   textResultSubtitle: { fontSize: 11, color: MUT, marginBottom: 8, fontWeight: '500' },

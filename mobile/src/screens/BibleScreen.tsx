@@ -279,6 +279,8 @@ export default function BibleScreen() {
   const [notedRefs, setNotedRefs] = useState<Set<string>>(new Set());
   const [highlightTarget, setHighlightTarget] = useState<BibleVerse | null>(null);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
+  const [sowdersViewer, setSowdersViewer] = useState<{ label: string; content: string } | null>(null);
+  const [sowdersHighlightTarget, setSowdersHighlightTarget] = useState<string | null>(null);
 
   const showToast = (msg: string, error = false) => {
     setToast({ msg, error });
@@ -354,6 +356,14 @@ export default function BibleScreen() {
     setExpanded(e => e ? { ...e, tab } : null);
     if (tab === 'sowders' && !expanded?.sowdersText && !expanded?.sowdersLoading) loadSowders(verse);
   };
+
+  const parseSections = (text: string): { label: string; content: string }[] =>
+    text.split('\n\n---\n\n')
+      .map(block => {
+        const m = block.match(/^\[(.+?)\]\n([\s\S]*)/);
+        return m ? { label: m[1], content: m[2].trim() } : { label: 'Teaching', content: block.trim() };
+      })
+      .filter(s => s.content.length > 20);
 
   const loadSowders = useCallback(async (verse: BibleVerse) => {
     setExpanded(e => e ? { ...e, sowdersLoading: true } : null);
@@ -432,7 +442,17 @@ export default function BibleScreen() {
         )}
         {e.tab === 'sowders' && (
           <View style={styles.panelSowders}>
-            {e.sowdersLoading ? <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} /> : <Text style={[styles.panelSowdersText, { color: c.textPrimary, fontSize: f.body }]}>{e.sowdersText}</Text>}
+            {e.sowdersLoading
+              ? <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} />
+              : e.sowdersText.length === 0
+              ? <Text style={[styles.panelSowdersText, { color: c.textMuted, fontSize: f.body }]}>No teaching found.</Text>
+              : parseSections(e.sowdersText).map((sec, i) => (
+                  <TouchableOpacity key={i} style={[styles.sowdersLink, { borderBottomColor: c.border }]} onPress={() => setSowdersViewer(sec)}>
+                    <Text style={[styles.sowdersLinkText, { color: c.primary, fontSize: f.body }]}>{sec.label}</Text>
+                    <Text style={[styles.sowdersLinkArrow, { color: c.textMuted }]}>›</Text>
+                  </TouchableOpacity>
+                ))
+            }
           </View>
         )}
       </View>
@@ -548,6 +568,51 @@ export default function BibleScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Sowders section viewer */}
+      <Modal visible={!!sowdersViewer} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSowdersViewer(null)}>
+        <View style={[styles.sowdersModal, { backgroundColor: c.background }]}>
+          <View style={[styles.sowdersModalHeader, { borderBottomColor: c.border }]}>
+            <Text style={[styles.sowdersModalTitle, { color: c.textPrimary }]} numberOfLines={2}>{sowdersViewer?.label}</Text>
+            <TouchableOpacity onPress={() => setSowdersViewer(null)}>
+              <Text style={[styles.sowdersModalClose, { color: c.textMuted }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.sowdersModalScroll} contentContainerStyle={styles.sowdersModalContent}>
+            <Text selectable style={[styles.sowdersModalText, { color: c.textPrimary }]}>{sowdersViewer?.content}</Text>
+          </ScrollView>
+          {sowdersHighlightTarget === null && (
+            <View style={[styles.sowdersModalFooter, { borderTopColor: c.border, backgroundColor: c.surface }]}>
+              <TouchableOpacity style={[styles.sowdersHighlightBtn, { backgroundColor: c.primary }]}
+                onPress={() => setSowdersHighlightTarget(sowdersViewer?.content.slice(0, 500) ?? '')}>
+                <Text style={styles.sowdersHighlightBtnText}>🖊 Highlight</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {sowdersHighlightTarget !== null && (
+            <View style={[styles.sowdersModalFooter, { borderTopColor: c.border, backgroundColor: c.surface }]}>
+              <Text style={[styles.sowdersPickerLabel, { color: c.textMuted }]}>Choose highlight colour:</Text>
+              <View style={styles.sowdersColorRow}>
+                {HIGHLIGHT_COLORS.map(({ color, label }) => (
+                  <TouchableOpacity key={color} style={[styles.sowdersColorSwatch, { backgroundColor: color }]}
+                    onPress={async () => {
+                      try {
+                        await api.createHighlight('sowders', sowdersViewer?.label ?? '', sowdersHighlightTarget, color);
+                        showToast('Highlight saved.');
+                      } catch { showToast('Could not save highlight.', true); }
+                      setSowdersHighlightTarget(null);
+                    }}>
+                    <Text style={styles.sowdersColorLabel}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity onPress={() => setSowdersHighlightTarget(null)}>
+                  <Text style={[styles.sowdersColorCancel, { color: c.textMuted }]}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
+
       <VerseChooser visible={chooserOpen} selectedBook={selectedBook} chapter={chapter} onNavigate={handleNavigate} onClose={() => setChooserOpen(false)} />
     </KeyboardAvoidingView>
   );
@@ -591,8 +656,11 @@ const styles = StyleSheet.create({
   panelInputMulti: { minHeight: 180, textAlignVertical: 'top' },
   panelSaveBtn: { borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 4 },
   panelSaveBtnText: { color: '#fff', fontWeight: 'bold' },
-  panelSowders: { paddingHorizontal: 16 },
+  panelSowders: { paddingHorizontal: 16, paddingBottom: 8 },
   panelSowdersText: { lineHeight: 26 },
+  sowdersLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1 },
+  sowdersLinkText: { flex: 1, fontWeight: '600', lineHeight: 20 },
+  sowdersLinkArrow: { fontSize: 20, marginLeft: 8 },
   // Highlight picker
   hlOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   hlSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderWidth: 1 },
@@ -605,4 +673,20 @@ const styles = StyleSheet.create({
   hlRemoveText: { fontSize: 14 },
   toast: { position: 'absolute', top: 12, alignSelf: 'center', borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10, zIndex: 99, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   toastText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  // Sowders viewer modal
+  sowdersModal: { flex: 1 },
+  sowdersModalHeader: { flexDirection: 'row', alignItems: 'center', padding: 18, paddingTop: 22, borderBottomWidth: 1, gap: 12 },
+  sowdersModalTitle: { flex: 1, fontSize: 17, fontWeight: '700', lineHeight: 24 },
+  sowdersModalClose: { fontSize: 22, paddingHorizontal: 4 },
+  sowdersModalScroll: { flex: 1 },
+  sowdersModalContent: { padding: 20, paddingBottom: 32 },
+  sowdersModalText: { fontSize: 15, lineHeight: 28 },
+  sowdersModalFooter: { borderTopWidth: 1, padding: 16 },
+  sowdersHighlightBtn: { borderRadius: 10, padding: 13, alignItems: 'center' },
+  sowdersHighlightBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  sowdersPickerLabel: { fontSize: 12, fontWeight: '600', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sowdersColorRow: { flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap' },
+  sowdersColorSwatch: { width: 52, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sowdersColorLabel: { fontSize: 10, fontWeight: '700', color: '#333' },
+  sowdersColorCancel: { fontSize: 14, paddingHorizontal: 8, paddingVertical: 10 },
 });

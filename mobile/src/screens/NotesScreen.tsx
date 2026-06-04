@@ -1,11 +1,84 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, TextInput,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, NativeSyntheticEvent, TextInputSelectionChangeEventData,
 } from 'react-native';
 import * as api from '../api';
 import type { NoteFolder, UserNote } from '../types';
 import { useDisplay } from '../context/DisplayContext';
+
+// ── Simple markdown renderer ──────────────────────────────────────────────────
+function MarkdownText({ text, baseStyle }: { text: string; baseStyle: any }) {
+  // Split on bold (**...**), italic (*...*), highlight (==...==)
+  const tokens: { type: 'bold' | 'italic' | 'highlight' | 'text'; value: string }[] = [];
+  const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|==(.+?)==)/gs;
+  let last = 0, m: RegExpExecArray | null;
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > last) tokens.push({ type: 'text', value: text.slice(last, m.index) });
+    if (m[2]) tokens.push({ type: 'bold',      value: m[2] });
+    else if (m[3]) tokens.push({ type: 'italic',    value: m[3] });
+    else if (m[4]) tokens.push({ type: 'highlight', value: m[4] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) tokens.push({ type: 'text', value: text.slice(last) });
+  return (
+    <Text style={baseStyle}>
+      {tokens.map((t, i) => {
+        if (t.type === 'bold')      return <Text key={i} style={{ fontWeight: 'bold' }}>{t.value}</Text>;
+        if (t.type === 'italic')    return <Text key={i} style={{ fontStyle: 'italic' }}>{t.value}</Text>;
+        if (t.type === 'highlight') return <Text key={i} style={{ backgroundColor: '#FFE066' }}>{t.value}</Text>;
+        return <Text key={i}>{t.value}</Text>;
+      })}
+    </Text>
+  );
+}
+
+// ── Formatting toolbar ────────────────────────────────────────────────────────
+const TOOLBAR_HIGHLIGHT_COLORS = [
+  { color: '#FFE066', label: '🟡' },
+  { color: '#90EE90', label: '🟢' },
+  { color: '#87CEEB', label: '🔵' },
+  { color: '#FFB6C1', label: '🩷' },
+];
+
+function FormatToolbar({ onFormat, primaryColor }: { onFormat: (prefix: string, suffix: string) => void; primaryColor: string }) {
+  const [showColors, setShowColors] = useState(false);
+  return (
+    <View style={tbStyles.bar}>
+      <TouchableOpacity style={tbStyles.btn} onPress={() => onFormat('**', '**')}>
+        <Text style={[tbStyles.btnText, { fontWeight: 'bold' }]}>B</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={tbStyles.btn} onPress={() => onFormat('*', '*')}>
+        <Text style={[tbStyles.btnText, { fontStyle: 'italic' }]}>I</Text>
+      </TouchableOpacity>
+      {showColors
+        ? TOOLBAR_HIGHLIGHT_COLORS.map(({ color, label }) => (
+            <TouchableOpacity key={color} style={[tbStyles.btn, { backgroundColor: color }]}
+              onPress={() => { onFormat(`==${color}:`, '=='); setShowColors(false); }}>
+              <Text style={tbStyles.btnText}>{label}</Text>
+            </TouchableOpacity>
+          ))
+        : <TouchableOpacity style={tbStyles.btn} onPress={() => setShowColors(true)}>
+            <Text style={tbStyles.btnText}>🖍</Text>
+          </TouchableOpacity>
+      }
+      <TouchableOpacity style={tbStyles.btn} onPress={() => onFormat('\n- ', '')}>
+        <Text style={tbStyles.btnText}>• </Text>
+      </TouchableOpacity>
+      {showColors && (
+        <TouchableOpacity style={tbStyles.btn} onPress={() => setShowColors(false)}>
+          <Text style={tbStyles.btnText}>✕</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const tbStyles = StyleSheet.create({
+  bar: { flexDirection: 'row', gap: 6, paddingVertical: 8, paddingHorizontal: 4, flexWrap: 'wrap' },
+  btn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F0F0F0', minWidth: 36, alignItems: 'center' },
+  btnText: { fontSize: 14, color: '#333' },
+});
 
 const FOLDER_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#c62828', '#00796b', '#5d4037', '#455a64'];
 
@@ -27,6 +100,17 @@ export default function NotesScreen() {
   const [editNoteId, setEditNoteId] = useState<number | null>(null);
   const [noteForm, setNoteForm] = useState(EMPTY_NOTE);
   const [savingNote, setSavingNote] = useState(false);
+  const [noteSelection, setNoteSelection] = useState({ start: 0, end: 0 });
+  const contentInputRef = useRef<TextInput>(null);
+
+  const applyFormat = (prefix: string, suffix: string) => {
+    const { start, end } = noteSelection;
+    const content = noteForm.content;
+    const selected = content.slice(start, end);
+    const newContent = content.slice(0, start) + prefix + selected + suffix + content.slice(end);
+    setNoteForm(fo => ({ ...fo, content: newContent }));
+    contentInputRef.current?.focus();
+  };
 
   const [folderModal, setFolderModal] = useState(false);
   const [editFolderId, setEditFolderId] = useState<number | null>(null);
@@ -212,7 +296,7 @@ export default function NotesScreen() {
                   <Text style={[styles.cardTitle, { color: c.textPrimary, fontSize: f.body + 2 }]} numberOfLines={1}>{n.title}</Text>
                   <Text style={[styles.cardDate, { color: c.textMuted, fontSize: f.label - 1 }]}>{new Date(n.updatedAt).toLocaleDateString()}</Text>
                 </View>
-                <Text style={[styles.cardContent, { color: c.textSecondary, fontSize: f.body }]} numberOfLines={4}>{n.content}</Text>
+                <MarkdownText text={n.content.slice(0, 300) + (n.content.length > 300 ? '…' : '')} baseStyle={[styles.cardContent, { color: c.textSecondary, fontSize: f.body }]} />
                 {n.sourceRef && (
                   <Text style={[styles.cardRef, { color: c.primary, fontSize: f.label }]}>
                     {n.sourceType === 'bible' ? '📖' : '📜'} {n.sourceRef}
@@ -265,11 +349,17 @@ export default function NotesScreen() {
             ))}
           </ScrollView>
 
-          <Text style={[styles.label, { color: c.textSecondary, fontSize: f.label }]}>Note</Text>
+          <View style={[styles.toolbarRow, { borderColor: c.border, backgroundColor: c.surface }]}>
+            <FormatToolbar onFormat={applyFormat} primaryColor={c.primary} />
+          </View>
           <TextInput
+            ref={contentInputRef}
             style={[styles.input, styles.inputMulti, { borderColor: c.border, backgroundColor: c.inputBg, color: c.textPrimary, fontSize: f.body }]}
             value={noteForm.content}
             onChangeText={v => setNoteForm(fo => ({ ...fo, content: v }))}
+            onSelectionChange={(e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) =>
+              setNoteSelection(e.nativeEvent.selection)
+            }
             placeholder="Write your note…"
             placeholderTextColor={c.textMuted}
             multiline
@@ -366,8 +456,9 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 22, fontWeight: 'bold' },
   modalClose: { fontSize: 22 },
   label: { fontWeight: '600', marginBottom: 6, marginTop: 16 },
+  toolbarRow: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, marginTop: 16, marginBottom: 4 },
   input: { borderWidth: 1, borderRadius: 10, padding: 14 },
-  inputMulti: { minHeight: 220, textAlignVertical: 'top' },
+  inputMulti: { minHeight: 300, textAlignVertical: 'top' },
   folderPickerScroll: { marginBottom: 4 },
   folderPickerChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, marginRight: 8 },
   folderPickerText: { fontSize: 13, fontWeight: '600' },
