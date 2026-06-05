@@ -1,5 +1,5 @@
 import client from './client';
-import type { Book, BooksResponse, Checkout, Reservation, Member, AuthUser, ChatResponse, TextSearchResult, NoteFolder, UserNote, UserHighlight, BibleVerse, SearchHistory } from '../types';
+import type { Book, BooksResponse, Checkout, Reservation, Member, AuthUser, ChatResponse, TextSearchResult, NoteFolder, UserNote, UserHighlight, BibleVerse, SearchHistory, GokTocYear, GokSection } from '../types';
 
 export const login = (email: string, password: string) =>
   client.post<{ token: string; user: AuthUser }>('/auth/login', { email, password });
@@ -83,6 +83,12 @@ export const createNote = (data: { title: string; content: string; sourceType?: 
 export const updateNote = (id: number, data: { title: string; content: string; sourceType?: string; sourceRef?: string; folderId?: number }) =>
   client.put<UserNote>(`/notes/${id}`, data);
 export const deleteNote = (id: number) => client.delete(`/notes/${id}`);
+
+// GoK Reader
+export const getGokToc = () =>
+  client.get<{ years: GokTocYear[] }>('/gok/toc');
+export const getGokSermon = (date: string) =>
+  client.get<{ sermonDate: string; sections: GokSection[] }>('/gok/sermon', { params: { date } });
 
 // Note Folders
 export const getNoteFolders = () => client.get<NoteFolder[]>('/note-folders');

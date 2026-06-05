@@ -8,6 +8,7 @@ import LoginScreen from '../screens/LoginScreen';
 import SermonSearchScreen from '../screens/SermonSearchScreen';
 import PdfViewerScreen from '../screens/PdfViewerScreen';
 import BibleScreen from '../screens/BibleScreen';
+import GokScreen from '../screens/GokScreen';
 import NotesScreen from '../screens/NotesScreen';
 import AccountScreen from '../screens/AccountScreen';
 import type { SermonStackParamList } from './types';
@@ -54,10 +55,11 @@ function AuthenticatedTabs() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
         tabBarIcon: ({ color, focused, size }) => {
           const icons: Record<string, [string, string]> = {
-            Sermons:  ['mic',         'mic-outline'],
-            Bible:    ['book',        'book-outline'],
+            Sermons:  ['mic',           'mic-outline'],
+            GoK:      ['library',       'library-outline'],
+            Bible:    ['book',          'book-outline'],
             Notes:    ['document-text', 'document-text-outline'],
-            Account:  ['person',      'person-outline'],
+            Account:  ['person',        'person-outline'],
           };
           const [active, inactive] = icons[route.name] ?? ['ellipse', 'ellipse-outline'];
           return <Ionicons name={(focused ? active : inactive) as any} size={22} color={color} />;
@@ -65,6 +67,7 @@ function AuthenticatedTabs() {
       })}
     >
       <Tab.Screen name="Sermons"  component={SermonNavigator} />
+      <Tab.Screen name="GoK"      component={GokScreen}     options={{ headerShown: false }} />
       <Tab.Screen name="Bible"    component={BibleScreen}   options={{ headerShown: true, headerTitle: 'King James Bible', headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />
       <Tab.Screen name="Notes"    component={NotesScreen}   options={{ headerShown: true, headerTitle: 'My Notes',         headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />
       <Tab.Screen name="Account"  component={AccountScreen} options={{ headerShown: true,                                  headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />

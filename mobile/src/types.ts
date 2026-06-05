@@ -108,6 +108,16 @@ export interface SearchHistory {
   createdAt: string;
 }
 
+export interface GokTocYear {
+  year: string;
+  sermons: string[];
+}
+
+export interface GokSection {
+  sectionTitle: string | null;
+  text: string;
+}
+
 export interface DocTopic {
   topic: string;
   count: number;
