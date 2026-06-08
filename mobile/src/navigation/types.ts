@@ -8,6 +8,12 @@ export type SermonStackParamList = {
   PdfViewer: { fileName: string; page: number; title: string; highlight?: string };
 };
 
+export type GokStackParamList = {
+  GokHome: undefined;
+  SermonSearch: undefined;
+  PdfViewer: { fileName: string; page: number; title: string; highlight?: string };
+};
+
 export type AdminStackParamList = {
   AdminDashboard: undefined;
   AdminCheckouts: undefined;

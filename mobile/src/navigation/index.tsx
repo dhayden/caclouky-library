@@ -11,9 +11,10 @@ import BibleScreen from '../screens/BibleScreen';
 import GokScreen from '../screens/GokScreen';
 import NotesScreen from '../screens/NotesScreen';
 import AccountScreen from '../screens/AccountScreen';
-import type { SermonStackParamList } from './types';
+import type { SermonStackParamList, GokStackParamList } from './types';
 
 const SermonStack = createNativeStackNavigator<SermonStackParamList>();
+const GokStack    = createNativeStackNavigator<GokStackParamList>();
 const Tab = createBottomTabNavigator();
 
 function SermonNavigator() {
@@ -31,6 +32,34 @@ function SermonNavigator() {
       <SermonStack.Screen name="SermonSearch" component={SermonSearchScreen} options={{ title: 'Sermons' }} />
       <SermonStack.Screen name="PdfViewer" component={PdfViewerScreen} options={({ route }) => ({ title: route.params.title })} />
     </SermonStack.Navigator>
+  );
+}
+
+function GokNavigator() {
+  const { theme } = useDisplay();
+  const c = theme.colors;
+  return (
+    <GokStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        headerStyle: { backgroundColor: c.surface },
+        headerTintColor: c.textPrimary,
+        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        headerShadowVisible: false,
+      }}
+    >
+      <GokStack.Screen name="GokHome" component={GokScreen} />
+      <GokStack.Screen
+        name="SermonSearch"
+        component={SermonSearchScreen as any}
+        options={{ headerShown: true, title: 'Search' }}
+      />
+      <GokStack.Screen
+        name="PdfViewer"
+        component={PdfViewerScreen as any}
+        options={({ route }) => ({ headerShown: true, title: (route.params as any).title })}
+      />
+    </GokStack.Navigator>
   );
 }
 
@@ -55,8 +84,8 @@ function AuthenticatedTabs() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
         tabBarIcon: ({ color, focused, size }) => {
           const icons: Record<string, [string, string]> = {
-            Sermons:  ['mic',           'mic-outline'],
             GoK:      ['library',       'library-outline'],
+            Sermons:  ['mic',           'mic-outline'],
             Bible:    ['book',          'book-outline'],
             Notes:    ['document-text', 'document-text-outline'],
             Account:  ['person',        'person-outline'],
@@ -66,8 +95,8 @@ function AuthenticatedTabs() {
         },
       })}
     >
+      <Tab.Screen name="GoK"      component={GokNavigator}  options={{ headerShown: false }} />
       <Tab.Screen name="Sermons"  component={SermonNavigator} />
-      <Tab.Screen name="GoK"      component={GokScreen}     options={{ headerShown: false }} />
       <Tab.Screen name="Bible"    component={BibleScreen}   options={{ headerShown: true, headerTitle: 'King James Bible', headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />
       <Tab.Screen name="Notes"    component={NotesScreen}   options={{ headerShown: true, headerTitle: 'My Notes',         headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />
       <Tab.Screen name="Account"  component={AccountScreen} options={{ headerShown: true,                                  headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />
@@ -89,12 +118,6 @@ export default function Navigation() {
           text:          theme.colors.textPrimary,
           border:        theme.colors.border,
           notification:  theme.colors.primary,
-        },
-        fonts: {
-          regular:  { fontFamily: 'System', fontWeight: '400' },
-          medium:   { fontFamily: 'System', fontWeight: '500' },
-          bold:     { fontFamily: 'System', fontWeight: '700' },
-          heavy:    { fontFamily: 'System', fontWeight: '900' },
         },
       }}
     >
