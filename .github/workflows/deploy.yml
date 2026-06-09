@@ -55,7 +55,7 @@ jobs:
       - name: Open firewall port
         run: |
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "sudo ufw allow 6080/tcp 2>/dev/null || true; sudo ufw status | grep 6080 || echo 'ufw not managing port (may be open via other means)'"
+            "sudo ufw allow 8080/tcp 2>/dev/null || true; sudo ufw status | grep 8080 || echo 'ufw not managing port (may be open via other means)'"
 
       - name: Stop running app
         run: |
@@ -80,7 +80,7 @@ jobs:
             export Ollama__BaseUrl='http://localhost:11434'
             export Ollama__Model='nomic-embed-text'
             export Ollama__ChatModel='llama3.2'
-            export ASPNETCORE_URLS='http://0.0.0.0:6080'
+            export ASPNETCORE_URLS='http://0.0.0.0:8080'
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
@@ -90,11 +90,11 @@ jobs:
             echo '--- health check ---'
             if kill -0 \$(cat ~/caclouky/app.pid) 2>/dev/null; then
               echo 'Process running'
-              curl -sf http://localhost:6080 && echo 'localhost OK' || echo 'localhost not responding'
+              curl -sf http://localhost:8080 && echo 'localhost OK' || echo 'localhost not responding'
             else
               echo 'FATAL: app crashed on startup'
               exit 1
             fi
           "
           echo '--- external connectivity check ---'
-          curl -sf --max-time 10 http://212.56.44.143:6080 && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE — firewall may be blocking port 6080'
+          curl -sf --max-time 10 http://212.56.44.143:8080 && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE — firewall may be blocking port 8080'
