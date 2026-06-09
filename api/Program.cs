@@ -279,9 +279,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Serve Angular SPA static files (production)
 app.UseDefaultFiles();
 app.UseStaticFiles();
+// Mobile web SPA fallback — any /mobile/* path that isn't a static file serves the mobile index
+app.MapFallbackToFile("/mobile/{*path:nonfile}", "mobile/index.html");
 app.MapFallbackToFile("index.html");
 
 app.Run();

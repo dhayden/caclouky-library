@@ -29,11 +29,22 @@ jobs:
         env:
           VITE_API_URL: /api
 
+      # ── Build Expo web (mobile) ────────────────────────────────────────────
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm install
+
+      - name: Build Expo web
+        working-directory: mobile
+        run: npx expo export --platform web
+
       # ── Copy React dist into API wwwroot ───────────────────────────────────
       - name: Copy React dist to API wwwroot
         run: |
           mkdir -p api/wwwroot
           cp -r web/caclouky-react/dist/. api/wwwroot/
+          mkdir -p api/wwwroot/mobile
+          cp -r mobile/dist/. api/wwwroot/mobile/
 
       # ── Build & Publish .NET API ───────────────────────────────────────────
       - uses: actions/setup-dotnet@v4
