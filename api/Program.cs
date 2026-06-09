@@ -113,10 +113,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<LibraryDbContext>();
-    if (string.IsNullOrEmpty(connectionString))
-        db.Database.EnsureCreated();
-    else
-        db.Database.Migrate();
+    db.Database.Migrate();
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     foreach (var role in new[] { "Admin", "Minister", "GeneralAssembly" })
