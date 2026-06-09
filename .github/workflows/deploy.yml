@@ -75,10 +75,16 @@ jobs:
             sudo iptables -L INPUT -n 2>/dev/null || echo 'no sudo access'
           "
 
-      - name: Open firewall port
+      - name: Configure nginx proxy
         run: |
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "sudo ufw allow 8080/tcp 2>/dev/null || true; sudo ufw status | grep 8080 || echo 'ufw not managing port (may be open via other means)'"
+            "printf 'server {\n    listen 80 default_server;\n    listen [::]:80 default_server;\n    location / {\n        proxy_pass http://127.0.0.1:8080;\n        proxy_http_version 1.1;\n        proxy_set_header Host \$host;\n        proxy_set_header X-Real-IP \$remote_addr;\n        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\n        proxy_read_timeout 300s;\n    }\n}\n' > /tmp/caclouky-nginx.conf && \
+            echo '${{ secrets.SERVER_PASSWORD }}' | sudo -S cp /tmp/caclouky-nginx.conf /etc/nginx/sites-available/caclouky && \
+            echo '${{ secrets.SERVER_PASSWORD }}' | sudo -S ln -sf /etc/nginx/sites-available/caclouky /etc/nginx/sites-enabled/caclouky && \
+            echo '${{ secrets.SERVER_PASSWORD }}' | sudo -S rm -f /etc/nginx/sites-enabled/default 2>/dev/null; \
+            echo '${{ secrets.SERVER_PASSWORD }}' | sudo -S nginx -t && \
+            echo '${{ secrets.SERVER_PASSWORD }}' | sudo -S systemctl reload nginx && \
+            echo 'nginx configured'"
 
       - name: Stop running app
         run: |
