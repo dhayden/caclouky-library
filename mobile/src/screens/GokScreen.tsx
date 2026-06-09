@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity, Pressable,
   StyleSheet, Modal, ActivityIndicator, Platform, Animated, Dimensions,
 } from 'react-native';
+import type { StyleProp, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -139,25 +140,49 @@ const coverStyles = StyleSheet.create({
 
 // ── Section block ─────────────────────────────────────────────────────────────
 
-function SectionBlock({ section, fontSize }: { section: GokSection; fontSize: number }) {
+function splitHighlight(text: string, term: string): string[] {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.split(new RegExp(`(${escaped})`, 'gi'));
+}
+
+function HighlightLine({ text, highlight, style }: { text: string; highlight?: string; style: StyleProp<TextStyle> }) {
+  if (!highlight?.trim()) return <Text style={style}>{text}</Text>;
+  const parts = splitHighlight(text, highlight);
+  return (
+    <Text style={style}>
+      {parts.map((p, i) =>
+        p.toLowerCase() === highlight.toLowerCase()
+          ? <Text key={i} style={{ backgroundColor: '#FFD700', color: '#000' }}>{p}</Text>
+          : p
+      )}
+    </Text>
+  );
+}
+
+function SectionBlock({ section, fontSize, highlight }: { section: GokSection; fontSize: number; highlight?: string }) {
   const { theme } = useDisplay();
   const c = theme.colors;
   const lines = section.text.split('\n');
   return (
     <View style={{ marginBottom: 20 }}>
       {section.sectionTitle ? (
-        <Text style={[styles.sectionTitle, { color: c.primary, fontSize: fontSize + 2 }]}>
-          {section.sectionTitle}
-        </Text>
+        <HighlightLine
+          text={section.sectionTitle}
+          highlight={highlight}
+          style={[styles.sectionTitle, { color: c.primary, fontSize: fontSize + 2 }]}
+        />
       ) : null}
       {lines.map((line, i) => {
         const trimmed = line.trim();
         if (!trimmed) return null;
         const isSpeaker = /^[A-Z][a-zA-Z .]+:$/.test(trimmed) || /^(Question|Answer|Brother [A-Z]|Bro\. |Sister )/.test(trimmed);
         return (
-          <Text key={i} style={[styles.bodyText, { color: isSpeaker ? c.textSecondary : c.textPrimary, fontSize }, isSpeaker && styles.speaker]}>
-            {trimmed}
-          </Text>
+          <HighlightLine
+            key={i}
+            text={trimmed}
+            highlight={highlight}
+            style={[styles.bodyText, { color: isSpeaker ? c.textSecondary : c.textPrimary, fontSize }, isSpeaker && styles.speaker]}
+          />
         );
       })}
     </View>
@@ -175,7 +200,7 @@ const LOAD_AHEAD_PX = 600; // start loading next sermon when this many px from b
 
 type Props = NativeStackScreenProps<GokStackParamList, 'GokHome'>;
 
-export default function GokScreen({ navigation }: Props) {
+export default function GokScreen({ navigation, route }: Props) {
   const { theme, fontSize: sizeKey, setFontSize } = useDisplay();
   const c = theme.colors;
   const f = theme.font;
@@ -196,6 +221,9 @@ export default function GokScreen({ navigation }: Props) {
   const sermonYPositions = useRef<Map<string, number>>(new Map()); // date → Y in scroll content
   const scrollYRef = useRef(0);
 
+  // Highlight term from search navigation
+  const [highlightTerm, setHighlightTerm] = useState('');
+
   // UI state
   const [chooserOpen, setChooserOpen]   = useState(false);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
@@ -207,10 +235,6 @@ export default function GokScreen({ navigation }: Props) {
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const [navShown, setNavShown] = useState(false);
 
-  // Tap detection (avoids blocking scroll)
-  const touchStartY = useRef(0);
-  const touchStartT = useRef(0);
-  const isScrolling = useRef(false);
 
   // ── Load a single sermon and append ──────────────────────────────────────────
 
@@ -250,6 +274,15 @@ export default function GokScreen({ navigation }: Props) {
       }
     })();
   }, [appendSermon]);
+
+  // ── React to search navigation params ────────────────────────────────────────
+
+  useEffect(() => {
+    const { scrollToDate, highlight } = route.params ?? {};
+    if (highlight !== undefined) setHighlightTerm(highlight);
+    if (scrollToDate && flatDates.length > 0) goToDate(scrollToDate, flatDates);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.scrollToDate, route.params?.highlight, flatDates]);
 
   // ── Load more when near bottom ────────────────────────────────────────────────
 
@@ -324,27 +357,12 @@ export default function GokScreen({ navigation }: Props) {
       .start(() => { if (!show) setNavShown(false); });
   };
 
-  const handleTouchStart = (e: any) => {
-    touchStartY.current = e.nativeEvent.pageY;
-    touchStartT.current = Date.now();
-  };
-  const handleTouchEnd = (e: any) => {
-    if (isScrolling.current) return;
-    const dy = Math.abs(e.nativeEvent.pageY - touchStartY.current);
-    const dt = Date.now() - touchStartT.current;
-    if (dy < 8 && dt < 300) toggleNav();
-  };
-
   const overlayBg = theme.dark ? 'rgba(8,10,24,0.92)' : 'rgba(248,246,240,0.96)';
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <View
-      style={[styles.root, { backgroundColor: c.background, paddingTop: insets.top }]}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
+    <View style={[styles.root, { backgroundColor: c.background, paddingTop: insets.top }]}>
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -352,57 +370,56 @@ export default function GokScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={100}
-        onScrollBeginDrag={() => { isScrolling.current = true; }}
-        onScrollEndDrag={() => { isScrolling.current = false; }}
-        onMomentumScrollEnd={() => { isScrolling.current = false; }}
       >
-        {/* Cover page */}
-        <CoverPage onLayout={h => { coverHeight.current = h; }} />
+        <Pressable onPress={toggleNav}>
+          {/* Cover page */}
+          <CoverPage onLayout={h => { coverHeight.current = h; }} />
 
-        {/* Divider */}
-        <View style={[styles.divider, { borderTopColor: c.border }]} />
+          {/* Divider */}
+          <View style={[styles.divider, { borderTopColor: c.border }]} />
 
-        {/* Loaded sermons — appended as user scrolls */}
-        {tocLoading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={c.primary} />
-          </View>
-        ) : (
-          <>
-            {loadedSermons.map(({ date, sections }) => (
-              <View
-                key={date}
-                onLayout={e => {
-                  sermonYPositions.current.set(date, e.nativeEvent.layout.y);
-                }}
-              >
-                <Text style={[styles.dateHeading, { color: c.textPrimary, fontSize: f.heading + 2 }]}>
-                  {date}
-                </Text>
-                {sections.map((s, i) => (
-                  <SectionBlock key={i} section={s} fontSize={f.body} />
-                ))}
-                {/* Separator between sermons */}
-                <View style={[styles.sermonSep, { borderTopColor: c.border }]} />
-              </View>
-            ))}
+          {/* Loaded sermons — appended as user scrolls */}
+          {tocLoading ? (
+            <View style={styles.centered}>
+              <ActivityIndicator size="large" color={c.primary} />
+            </View>
+          ) : (
+            <>
+              {loadedSermons.map(({ date, sections }) => (
+                <View
+                  key={date}
+                  onLayout={e => {
+                    sermonYPositions.current.set(date, e.nativeEvent.layout.y);
+                  }}
+                >
+                  <Text style={[styles.dateHeading, { color: c.textPrimary, fontSize: f.heading + 2 }]}>
+                    {date}
+                  </Text>
+                  {sections.map((s, i) => (
+                    <SectionBlock key={i} section={s} fontSize={f.body} highlight={highlightTerm || undefined} />
+                  ))}
+                  {/* Separator between sermons */}
+                  <View style={[styles.sermonSep, { borderTopColor: c.border }]} />
+                </View>
+              ))}
 
-            {/* Loading spinner at bottom */}
-            {loadingMore && (
-              <View style={styles.loadMoreSpinner}>
-                <ActivityIndicator size="small" color={c.textMuted} />
-              </View>
-            )}
+              {/* Loading spinner at bottom */}
+              {loadingMore && (
+                <View style={styles.loadMoreSpinner}>
+                  <ActivityIndicator size="small" color={c.textMuted} />
+                </View>
+              )}
 
-            {/* End of document */}
-            {!loadingMore && nextIndexRef.current >= flatDates.length && flatDates.length > 0 && (
-              <View style={styles.endOfDoc}>
-                <Ionicons name="book-outline" size={24} color={c.textMuted} />
-                <Text style={[styles.endText, { color: c.textMuted }]}>End of Gospel of the Kingdom Papers</Text>
-              </View>
-            )}
-          </>
-        )}
+              {/* End of document */}
+              {!loadingMore && nextIndexRef.current >= flatDates.length && flatDates.length > 0 && (
+                <View style={styles.endOfDoc}>
+                  <Ionicons name="book-outline" size={24} color={c.textMuted} />
+                  <Text style={[styles.endText, { color: c.textMuted }]}>End of Gospel of the Kingdom Papers</Text>
+                </View>
+              )}
+            </>
+          )}
+        </Pressable>
       </ScrollView>
 
       {/* Overlay header */}

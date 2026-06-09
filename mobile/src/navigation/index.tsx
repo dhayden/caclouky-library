@@ -11,29 +11,10 @@ import BibleScreen from '../screens/BibleScreen';
 import GokScreen from '../screens/GokScreen';
 import NotesScreen from '../screens/NotesScreen';
 import AccountScreen from '../screens/AccountScreen';
-import type { SermonStackParamList, GokStackParamList } from './types';
+import type { GokStackParamList } from './types';
 
-const SermonStack = createNativeStackNavigator<SermonStackParamList>();
-const GokStack    = createNativeStackNavigator<GokStackParamList>();
+const GokStack = createNativeStackNavigator<GokStackParamList>();
 const Tab = createBottomTabNavigator();
-
-function SermonNavigator() {
-  const { theme } = useDisplay();
-  const c = theme.colors;
-  return (
-    <SermonStack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: c.surface },
-        headerTintColor: c.textPrimary,
-        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
-        headerShadowVisible: false,
-      }}
-    >
-      <SermonStack.Screen name="SermonSearch" component={SermonSearchScreen} options={{ title: 'Sermons' }} />
-      <SermonStack.Screen name="PdfViewer" component={PdfViewerScreen} options={({ route }) => ({ title: route.params.title })} />
-    </SermonStack.Navigator>
-  );
-}
 
 function GokNavigator() {
   const { theme } = useDisplay();
@@ -85,7 +66,6 @@ function AuthenticatedTabs() {
         tabBarIcon: ({ color, focused, size }) => {
           const icons: Record<string, [string, string]> = {
             GoK:      ['library',       'library-outline'],
-            Sermons:  ['mic',           'mic-outline'],
             Bible:    ['book',          'book-outline'],
             Notes:    ['document-text', 'document-text-outline'],
             Account:  ['person',        'person-outline'],
@@ -96,7 +76,6 @@ function AuthenticatedTabs() {
       })}
     >
       <Tab.Screen name="GoK"      component={GokNavigator}  options={{ headerShown: false }} />
-      <Tab.Screen name="Sermons"  component={SermonNavigator} />
       <Tab.Screen name="Bible"    component={BibleScreen}   options={{ headerShown: true, headerTitle: 'King James Bible', headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />
       <Tab.Screen name="Notes"    component={NotesScreen}   options={{ headerShown: true, headerTitle: 'My Notes',         headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />
       <Tab.Screen name="Account"  component={AccountScreen} options={{ headerShown: true,                                  headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.textPrimary, headerTitleStyle: { fontWeight: '700', fontSize: 17 }, headerShadowVisible: false }} />

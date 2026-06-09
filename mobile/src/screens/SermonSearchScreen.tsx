@@ -4,7 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { SermonStackParamList } from '../navigation/types';
+import type { GokStackParamList } from '../navigation/types';
 import type { Citation, TextSearchResult, ScriptureRef, SearchHistory, BibleVerse, DocTopic } from '../types';
 import * as api from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -57,7 +57,7 @@ function HighlightedSnippet({ text, query }: { text: string; query: string }) {
 const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
 const HIGHLIGHT_LABELS = ['Yellow', 'Green', 'Blue', 'Pink', 'Purple'];
 
-type Props = NativeStackScreenProps<SermonStackParamList, 'SermonSearch'>;
+type Props = NativeStackScreenProps<GokStackParamList, 'SermonSearch'>;
 type SearchMode = 'ai' | 'text' | 'topics';
 
 interface Message {
@@ -369,10 +369,13 @@ export default function SermonSearchScreen({ navigation }: Props) {
                 const title = buildTitle(r);
                 return (
                   <TouchableOpacity key={i} style={styles.textResult}
-                    onPress={() => navigation.navigate('PdfViewer', {
-                      fileName: r.fileName, page: r.pageNumber,
-                      title, highlight: r.snippet,
-                    })}>
+                    onPress={() => {
+                      if (r.sermonDate) {
+                        navigation.navigate('GokHome', { scrollToDate: r.sermonDate, highlight: lastTextQuery });
+                      } else {
+                        navigation.navigate('PdfViewer', { fileName: r.fileName, page: r.pageNumber, title, highlight: r.snippet });
+                      }
+                    }}>
                     <Text style={styles.textResultTitle}>{title}</Text>
                     <HighlightedSnippet text={r.snippet} query={lastTextQuery} />
                   </TouchableOpacity>
@@ -401,7 +404,13 @@ export default function SermonSearchScreen({ navigation }: Props) {
                   const dateLabel = r.sermonDate ?? parseSermonDate(r.fileName);
                   return (
                     <TouchableOpacity key={i} style={styles.textResult}
-                      onPress={() => navigation.navigate('PdfViewer', { fileName: r.fileName, page: r.pageNumber, title: dateLabel, highlight: r.snippet })}>
+                      onPress={() => {
+                        if (r.sermonDate) {
+                          navigation.navigate('GokHome', { scrollToDate: r.sermonDate, highlight: selectedTopic ?? undefined });
+                        } else {
+                          navigation.navigate('PdfViewer', { fileName: r.fileName, page: r.pageNumber, title: dateLabel, highlight: r.snippet });
+                        }
+                      }}>
                       <Text style={styles.textResultTitle}>{dateLabel}</Text>
                       <Text style={styles.textResultSubtitle}>p.{r.pageNumber}</Text>
                       <Text style={styles.textResultSnippet} numberOfLines={4}>{r.snippet}</Text>
