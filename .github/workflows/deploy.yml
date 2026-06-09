@@ -3,6 +3,7 @@ name: Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -107,16 +108,23 @@ jobs:
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
             sleep 10
-            echo '--- app.log ---'
+            echo '--- app.log (t=10s) ---'
             cat ~/caclouky/app.log || true
-            echo '--- health check ---'
+            echo '--- process check (t=10s) ---'
+            if ! kill -0 \$(cat ~/caclouky/app.pid) 2>/dev/null; then
+              echo 'FATAL: app crashed on startup'; exit 1
+            fi
+            echo 'Process alive at t=10s — waiting 50s more for seeding...'
+            sleep 50
+            echo '--- app.log (t=60s) ---'
+            cat ~/caclouky/app.log || true
+            echo '--- final process check ---'
             if kill -0 \$(cat ~/caclouky/app.pid) 2>/dev/null; then
-              echo 'Process running'
+              echo 'Process still running'
               curl -sf http://localhost:8080 && echo 'localhost OK' || echo 'localhost not responding'
             else
-              echo 'FATAL: app crashed on startup'
-              exit 1
+              echo 'FATAL: app crashed after startup'; exit 1
             fi
           "
           echo '--- external connectivity check ---'
-          curl -sf --max-time 10 http://212.56.44.143:8080 && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE — firewall may be blocking port 8080'
+          curl -sf --max-time 10 http://212.56.44.143:8080 && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE'

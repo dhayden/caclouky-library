@@ -252,12 +252,15 @@ using (var scope = app.Services.CreateScope())
     }
 
     // ── Seed KJV Bible (runs once if table is empty) ──────────────────────────
+    // Delay start so the app is fully up before the heavy SQLite write begins.
+    // SQLite allows only one writer; seeding 31K rows while handling requests
+    // would cause "database is locked" errors on the main request pipeline.
     var bible = scope.ServiceProvider.GetRequiredService<CacloukyLibrary.Services.BibleService>();
     if (!bible.IsSeeded())
     {
-        // Create a new scope so the DbContext isn't disposed when the seed runs
         _ = Task.Run(async () =>
         {
+            await Task.Delay(TimeSpan.FromSeconds(15));
             using var seedScope = app.Services.CreateScope();
             var svc = seedScope.ServiceProvider.GetRequiredService<CacloukyLibrary.Services.BibleService>();
             await svc.SeedAsync();
