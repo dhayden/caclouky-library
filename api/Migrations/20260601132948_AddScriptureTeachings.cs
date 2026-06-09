@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -15,14 +15,14 @@ namespace CacloukyLibrary.Migrations
                 name: "ScriptureTeachings",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    Reference = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Book = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Chapter = table.Column<int>(type: "int", nullable: false),
-                    Verse = table.Column<int>(type: "int", nullable: false),
-                    Teaching = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    GeneratedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    Reference = table.Column<string>(maxLength: 100, nullable: false),
+                    Book = table.Column<string>(maxLength: 100, nullable: false),
+                    Chapter = table.Column<int>(nullable: false),
+                    Verse = table.Column<int>(nullable: false),
+                    Teaching = table.Column<string>(nullable: false),
+                    GeneratedAt = table.Column<DateTime>(nullable: false)
                 },
                 constraints: table =>
                 {

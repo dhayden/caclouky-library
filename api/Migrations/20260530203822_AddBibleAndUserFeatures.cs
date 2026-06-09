@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -15,13 +15,13 @@ namespace CacloukyLibrary.Migrations
                 name: "BibleVerses",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    BookNumber = table.Column<int>(type: "int", nullable: false),
-                    Book = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Chapter = table.Column<int>(type: "int", nullable: false),
-                    Verse = table.Column<int>(type: "int", nullable: false),
-                    Text = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    BookNumber = table.Column<int>(nullable: false),
+                    Book = table.Column<string>(nullable: false),
+                    Chapter = table.Column<int>(nullable: false),
+                    Verse = table.Column<int>(nullable: false),
+                    Text = table.Column<string>(nullable: false)
                 },
                 constraints: table =>
                 {
@@ -32,12 +32,12 @@ namespace CacloukyLibrary.Migrations
                 name: "SearchHistories",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Query = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Type = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    UserId = table.Column<string>(nullable: false),
+                    Query = table.Column<string>(nullable: false),
+                    Type = table.Column<string>(nullable: false),
+                    CreatedAt = table.Column<DateTime>(nullable: false)
                 },
                 constraints: table =>
                 {
@@ -48,14 +48,14 @@ namespace CacloukyLibrary.Migrations
                 name: "UserHighlights",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    SourceType = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    SourceRef = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    SelectedText = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Color = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    UserId = table.Column<string>(nullable: false),
+                    SourceType = table.Column<string>(nullable: false),
+                    SourceRef = table.Column<string>(nullable: false),
+                    SelectedText = table.Column<string>(nullable: false),
+                    Color = table.Column<string>(nullable: false),
+                    CreatedAt = table.Column<DateTime>(nullable: false)
                 },
                 constraints: table =>
                 {
@@ -66,15 +66,15 @@ namespace CacloukyLibrary.Migrations
                 name: "UserNotes",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Title = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Content = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    SourceType = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    SourceRef = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    UserId = table.Column<string>(nullable: false),
+                    Title = table.Column<string>(nullable: false),
+                    Content = table.Column<string>(nullable: false),
+                    SourceType = table.Column<string>(nullable: true),
+                    SourceRef = table.Column<string>(nullable: true),
+                    CreatedAt = table.Column<DateTime>(nullable: false),
+                    UpdatedAt = table.Column<DateTime>(nullable: false)
                 },
                 constraints: table =>
                 {

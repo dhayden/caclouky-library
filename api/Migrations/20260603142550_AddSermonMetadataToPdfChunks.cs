@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -13,13 +13,11 @@ namespace CacloukyLibrary.Migrations
             migrationBuilder.AddColumn<string>(
                 name: "SectionTitle",
                 table: "PdfChunks",
-                type: "nvarchar(max)",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "SermonDate",
                 table: "PdfChunks",
-                type: "nvarchar(max)",
                 nullable: true);
         }
 
