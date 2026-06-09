@@ -14,7 +14,8 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<LibraryDbContext>(options =>
 {
     if (string.IsNullOrEmpty(connectionString))
-        options.UseSqlite("Data Source=caclouky.db");
+        options.UseSqlite("Data Source=caclouky.db")
+               .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
     else
         options.UseSqlServer(connectionString);
 });
