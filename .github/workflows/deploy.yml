@@ -79,9 +79,15 @@ jobs:
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
-            sleep 5
-            echo '--- app.log (first 50 lines) ---'
-            head -50 ~/caclouky/app.log || true
-            echo '--- process still running? ---'
-            kill -0 \$(cat ~/caclouky/app.pid) 2>&1 && echo 'YES' || echo 'NO - crashed on startup'
+            sleep 8
+            echo '--- app.log ---'
+            cat ~/caclouky/app.log || true
+            echo '--- health check ---'
+            if kill -0 \$(cat ~/caclouky/app.pid) 2>/dev/null; then
+              echo 'Process running — checking HTTP'
+              curl -sf http://localhost:6080/health && echo 'HTTP OK' || curl -sf http://localhost:6080 && echo 'HTTP OK' || echo 'HTTP not yet ready (process alive)'
+            else
+              echo 'FATAL: app crashed on startup'
+              exit 1
+            fi
           "
