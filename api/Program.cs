@@ -149,8 +149,43 @@ using (var scope = app.Services.CreateScope())
             if (HasTable("Books") && HasCol("Books", "IsRestricted")) Mark("20260330000458_AddIsRestrictedToBook");
             // AddSermonSearch: mark applied if tables already exist
             if (HasTable("PdfDocuments")) Mark("20260415135840_AddSermonSearch");
+
+            // AddBibleAndUserFeatures — EF Core generates nvarchar even without explicit type: because
+            // entity annotations on the model override the SQLite type mapper at SQL generation time.
+            // Handle entirely in bootstrap with correct SQLite DDL.
+            Run(@"CREATE TABLE IF NOT EXISTS ""BibleVerses"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_BibleVerses"" PRIMARY KEY AUTOINCREMENT, ""BookNumber"" INTEGER NOT NULL, ""Book"" TEXT NOT NULL, ""Chapter"" INTEGER NOT NULL, ""Verse"" INTEGER NOT NULL, ""Text"" TEXT NOT NULL)");
+            Run(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_BibleVerses_Book_Chapter_Verse"" ON ""BibleVerses"" (""Book"", ""Chapter"", ""Verse"")");
+            Run(@"CREATE INDEX IF NOT EXISTS ""IX_BibleVerses_BookNumber_Chapter_Verse"" ON ""BibleVerses"" (""BookNumber"", ""Chapter"", ""Verse"")");
+            Run(@"CREATE TABLE IF NOT EXISTS ""SearchHistories"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_SearchHistories"" PRIMARY KEY AUTOINCREMENT, ""UserId"" TEXT NOT NULL, ""Query"" TEXT NOT NULL, ""Type"" TEXT NOT NULL, ""CreatedAt"" TEXT NOT NULL)");
+            Run(@"CREATE INDEX IF NOT EXISTS ""IX_SearchHistories_UserId"" ON ""SearchHistories"" (""UserId"")");
+            Run(@"CREATE TABLE IF NOT EXISTS ""UserHighlights"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_UserHighlights"" PRIMARY KEY AUTOINCREMENT, ""UserId"" TEXT NOT NULL, ""SourceType"" TEXT NOT NULL, ""SourceRef"" TEXT NOT NULL, ""SelectedText"" TEXT NOT NULL, ""Color"" TEXT NOT NULL, ""CreatedAt"" TEXT NOT NULL)");
+            Run(@"CREATE INDEX IF NOT EXISTS ""IX_UserHighlights_UserId_SourceType_SourceRef"" ON ""UserHighlights"" (""UserId"", ""SourceType"", ""SourceRef"")");
+            Run(@"CREATE TABLE IF NOT EXISTS ""UserNotes"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_UserNotes"" PRIMARY KEY AUTOINCREMENT, ""UserId"" TEXT NOT NULL, ""Title"" TEXT NOT NULL, ""Content"" TEXT NOT NULL, ""SourceType"" TEXT NULL, ""SourceRef"" TEXT NULL, ""CreatedAt"" TEXT NOT NULL, ""UpdatedAt"" TEXT NOT NULL)");
+            Run(@"CREATE INDEX IF NOT EXISTS ""IX_UserNotes_UserId"" ON ""UserNotes"" (""UserId"")");
+            Mark("20260530203822_AddBibleAndUserFeatures");
+
+            // AddNoteFolders
+            if (!HasCol("UserNotes", "FolderId")) Run(@"ALTER TABLE ""UserNotes"" ADD COLUMN ""FolderId"" INTEGER NULL");
+            Run(@"CREATE TABLE IF NOT EXISTS ""NoteFolders"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_NoteFolders"" PRIMARY KEY AUTOINCREMENT, ""UserId"" TEXT NOT NULL, ""Name"" TEXT NOT NULL, ""Color"" TEXT NULL, ""CreatedAt"" TEXT NOT NULL)");
+            Run(@"CREATE INDEX IF NOT EXISTS ""IX_UserNotes_FolderId"" ON ""UserNotes"" (""FolderId"")");
+            Run(@"CREATE INDEX IF NOT EXISTS ""IX_NoteFolders_UserId"" ON ""NoteFolders"" (""UserId"")");
+            Mark("20260601131159_AddNoteFolders");
+
+            // AddScriptureTeachings
+            Run(@"CREATE TABLE IF NOT EXISTS ""ScriptureTeachings"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_ScriptureTeachings"" PRIMARY KEY AUTOINCREMENT, ""Reference"" TEXT NOT NULL, ""Book"" TEXT NOT NULL, ""Chapter"" INTEGER NOT NULL, ""Verse"" INTEGER NOT NULL, ""Teaching"" TEXT NOT NULL, ""GeneratedAt"" TEXT NOT NULL)");
+            Run(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_ScriptureTeachings_Book_Chapter_Verse"" ON ""ScriptureTeachings"" (""Book"", ""Chapter"", ""Verse"")");
+            Mark("20260601132948_AddScriptureTeachings");
+
+            // AddSermonMetadataToPdfChunks
+            if (HasTable("PdfChunks") && !HasCol("PdfChunks", "SectionTitle")) Run(@"ALTER TABLE ""PdfChunks"" ADD COLUMN ""SectionTitle"" TEXT NULL");
+            if (HasTable("PdfChunks") && !HasCol("PdfChunks", "SermonDate")) Run(@"ALTER TABLE ""PdfChunks"" ADD COLUMN ""SermonDate"" TEXT NULL");
+            Mark("20260603142550_AddSermonMetadataToPdfChunks");
+
             // Full-text index uses raw SQL Server syntax — always skip on SQLite
             Mark("20260603194533_AddFullTextIndexOnPdfChunkContent");
+
+            // SyncModel — empty migration, mark applied
+            Mark("20260609173539_SyncModel");
         }
         finally { if (opened) conn.Close(); }
     }
