@@ -63,6 +63,17 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p 2222 212.56.44.143 >> ~/.ssh/known_hosts
 
+      - name: Diagnose server ports
+        run: |
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 "
+            echo '--- listening ports ---'
+            ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || echo 'no ss/netstat'
+            echo '--- ufw status ---'
+            sudo ufw status 2>/dev/null || echo 'no sudo access'
+            echo '--- iptables ---'
+            sudo iptables -L INPUT -n 2>/dev/null || echo 'no sudo access'
+          "
+
       - name: Open firewall port
         run: |
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
