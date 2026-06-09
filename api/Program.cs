@@ -113,6 +113,56 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<LibraryDbContext>();
+
+    // For SQLite (no SQL Server connection string): bootstrap migration history
+    // if the DB was originally created with EnsureCreated(), which never tracks migrations.
+    // This preserves all existing data while letting Migrate() add only what's missing.
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        var conn = db.Database.GetDbConnection();
+        bool opened = conn.State != System.Data.ConnectionState.Open;
+        if (opened) conn.Open();
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='__EFMigrationsHistory'";
+            if ((long)cmd.ExecuteScalar()! == 0)
+            {
+                cmd.CommandText = @"CREATE TABLE ""__EFMigrationsHistory"" (""MigrationId"" TEXT NOT NULL CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY, ""ProductVersion"" TEXT NOT NULL)";
+                cmd.ExecuteNonQuery();
+
+                bool Has(string t) { cmd.CommandText = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{t}'"; return (long)cmd.ExecuteScalar()! > 0; }
+                void Mark(string id) { cmd.CommandText = $@"INSERT INTO ""__EFMigrationsHistory"" VALUES ('{id}', '8.0.25')"; cmd.ExecuteNonQuery(); }
+                void Run(string s) { cmd.CommandText = s; cmd.ExecuteNonQuery(); }
+
+                // InitialCreate: mark applied if identity tables exist (they pre-date migrations).
+                // Also create library tables (Books/Checkouts/Reservations) that EnsureCreated()
+                // may have missed, using IF NOT EXISTS so existing data is untouched.
+                if (Has("AspNetUsers"))
+                {
+                    Mark("20260324194846_InitialCreate");
+                    Run(@"CREATE TABLE IF NOT EXISTS ""Books"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_Books"" PRIMARY KEY AUTOINCREMENT, ""ISBN"" TEXT NOT NULL, ""Title"" TEXT NOT NULL, ""Author"" TEXT NOT NULL, ""Publisher"" TEXT, ""PublishedYear"" INTEGER, ""Genre"" TEXT, ""Description"" TEXT, ""CoverImageUrl"" TEXT, ""TotalCopies"" INTEGER NOT NULL, ""AvailableCopies"" INTEGER NOT NULL, ""CreatedAt"" TEXT NOT NULL)");
+                    Run(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Books_ISBN"" ON ""Books"" (""ISBN"")");
+                    Run(@"CREATE TABLE IF NOT EXISTS ""Checkouts"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_Checkouts"" PRIMARY KEY AUTOINCREMENT, ""BookId"" INTEGER NOT NULL, ""UserId"" TEXT NOT NULL, ""CheckedOutAt"" TEXT NOT NULL, ""DueDate"" TEXT NOT NULL, ""ReturnedAt"" TEXT, ""LateFee"" TEXT, CONSTRAINT ""FK_Checkouts_Books_BookId"" FOREIGN KEY (""BookId"") REFERENCES ""Books"" (""Id"") ON DELETE CASCADE, CONSTRAINT ""FK_Checkouts_AspNetUsers_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""AspNetUsers"" (""Id"") ON DELETE CASCADE)");
+                    Run(@"CREATE INDEX IF NOT EXISTS ""IX_Checkouts_BookId"" ON ""Checkouts"" (""BookId"")");
+                    Run(@"CREATE INDEX IF NOT EXISTS ""IX_Checkouts_UserId"" ON ""Checkouts"" (""UserId"")");
+                    Run(@"CREATE TABLE IF NOT EXISTS ""Reservations"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_Reservations"" PRIMARY KEY AUTOINCREMENT, ""BookId"" INTEGER NOT NULL, ""UserId"" TEXT NOT NULL, ""ReservedAt"" TEXT NOT NULL, ""AvailableAt"" TEXT, ""Status"" TEXT NOT NULL, CONSTRAINT ""FK_Reservations_Books_BookId"" FOREIGN KEY (""BookId"") REFERENCES ""Books"" (""Id"") ON DELETE CASCADE, CONSTRAINT ""FK_Reservations_AspNetUsers_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""AspNetUsers"" (""Id"") ON DELETE CASCADE)");
+                    Run(@"CREATE INDEX IF NOT EXISTS ""IX_Reservations_BookId"" ON ""Reservations"" (""BookId"")");
+                    Run(@"CREATE INDEX IF NOT EXISTS ""IX_Reservations_UserId"" ON ""Reservations"" (""UserId"")");
+                    // AddIsRestrictedToBook not marked — Migrate() will add the column to Books
+                }
+
+                if (Has("PdfDocuments")) Mark("20260415135840_AddSermonSearch");
+                // AddBibleAndUserFeatures, AddNoteFolders, AddScriptureTeachings,
+                // AddSermonMetadataToPdfChunks — left pending so Migrate() applies them
+
+                // Full-text index migration uses raw SQL Server syntax; always skip on SQLite
+                Mark("20260603194533_AddFullTextIndexOnPdfChunkContent");
+            }
+        }
+        finally { if (opened) conn.Close(); }
+    }
+
     db.Database.Migrate();
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
