@@ -52,6 +52,11 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p 2222 212.56.44.143 >> ~/.ssh/known_hosts
 
+      - name: Open firewall port
+        run: |
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
+            "sudo ufw allow 6080/tcp 2>/dev/null || true; sudo ufw status | grep 6080 || echo 'ufw not managing port (may be open via other means)'"
+
       - name: Stop running app
         run: |
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
@@ -79,15 +84,17 @@ jobs:
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
-            sleep 8
+            sleep 10
             echo '--- app.log ---'
             cat ~/caclouky/app.log || true
             echo '--- health check ---'
             if kill -0 \$(cat ~/caclouky/app.pid) 2>/dev/null; then
-              echo 'Process running — checking HTTP'
-              curl -sf http://localhost:6080/health && echo 'HTTP OK' || curl -sf http://localhost:6080 && echo 'HTTP OK' || echo 'HTTP not yet ready (process alive)'
+              echo 'Process running'
+              curl -sf http://localhost:6080 && echo 'localhost OK' || echo 'localhost not responding'
             else
               echo 'FATAL: app crashed on startup'
               exit 1
             fi
           "
+          echo '--- external connectivity check ---'
+          curl -sf --max-time 10 http://212.56.44.143:6080 && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE — firewall may be blocking port 6080'
