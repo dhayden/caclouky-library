@@ -64,22 +64,6 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p 2222 212.56.44.143 >> ~/.ssh/known_hosts
 
-      - name: Check nginx write access and root ssh
-        run: |
-          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 "
-            echo '--- nginx dir perms ---'
-            ls -la /etc/nginx/ 2>/dev/null || echo no-nginx
-            ls -la /etc/nginx/conf.d/ 2>/dev/null || echo no-conf-d
-            ls -la /etc/nginx/sites-available/ 2>/dev/null || echo no-sites-avail
-            echo '--- writable test ---'
-            touch /etc/nginx/conf.d/test 2>/dev/null && echo WRITABLE && rm /etc/nginx/conf.d/test || echo NOT-WRITABLE
-            echo '--- what is on port 80 ---'
-            ss -tlnp | grep ':80'
-            echo '--- nginx user ---'
-            ps aux | grep nginx | grep -v grep
-          "
-          echo '--- try root ssh ---'
-          ssh -i ~/.ssh/deploy_key -p 2222 -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@212.56.44.143 "id; ss -tlnp | grep :80" 2>&1 || echo 'root-ssh-failed'
 
       - name: Stop running app
         run: |
@@ -104,7 +88,7 @@ jobs:
             export Ollama__BaseUrl='http://localhost:11434'
             export Ollama__Model='nomic-embed-text'
             export Ollama__ChatModel='llama3.2'
-            export ASPNETCORE_URLS='http://0.0.0.0:8080'
+            export ASPNETCORE_URLS='http://0.0.0.0:80'
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
@@ -122,10 +106,10 @@ jobs:
             echo '--- final process check ---'
             if kill -0 \$(cat ~/caclouky/app.pid) 2>/dev/null; then
               echo 'Process still running'
-              curl -sf http://localhost:8080 && echo 'localhost OK' || echo 'localhost not responding'
+              curl -sf http://localhost:80 && echo 'localhost OK' || echo 'localhost not responding'
             else
               echo 'FATAL: app crashed after startup'; exit 1
             fi
           "
           echo '--- external connectivity check ---'
-          curl -sf --max-time 10 http://212.56.44.143:8080 && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE'
+          curl -sf --max-time 10 http://212.56.44.143 && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE'
