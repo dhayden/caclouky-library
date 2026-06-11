@@ -90,7 +90,7 @@ jobs:
             export Ollama__BaseUrl='http://localhost:11434'
             export Ollama__Model='nomic-embed-text'
             export Ollama__ChatModel='llama3.2'
-            export ASPNETCORE_URLS='http://0.0.0.0:80'
+            export ASPNETCORE_URLS='http://0.0.0.0:5000'
             nohup dotnet CacloukyLibrary.dll > ~/caclouky/app.log 2>&1 &
             echo \$! > ~/caclouky/app.pid
             echo started PID \$(cat ~/caclouky/app.pid)
@@ -108,7 +108,7 @@ jobs:
             echo '--- final process check ---'
             if kill -0 \$(cat ~/caclouky/app.pid) 2>/dev/null; then
               echo 'Process still running'
-              curl -sf http://localhost:80 && echo 'localhost OK' || echo 'localhost not responding'
+              curl -sf http://localhost:5000 && echo 'localhost OK' || echo 'localhost not responding'
             else
               echo 'FATAL: app crashed after startup'; exit 1
             fi
