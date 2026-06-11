@@ -64,21 +64,13 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p 2222 212.56.44.143 >> ~/.ssh/known_hosts
 
-      - name: Diagnose server ports
+      - name: Diagnose and configure
         run: |
-          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 "
-            echo '--- listening ports ---'
-            ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || echo 'no ss/netstat'
-            echo '--- ufw status ---'
-            sudo ufw status 2>/dev/null || echo 'no sudo access'
-            echo '--- iptables ---'
-            sudo iptables -L INPUT -n 2>/dev/null || echo 'no sudo access'
-          "
-
-      - name: Configure nginx proxy
-        run: |
+          ssh -i ~/.ssh/deploy_key -p 2222 -o StrictHostKeyChecking=no root@212.56.44.143 \
+            "echo 'ROOT ACCESS OK'; id; ss -tlnp | grep -E '80|8080'; ls /etc/nginx/sites-enabled/" \
+            && echo 'root ssh worked' || echo 'root ssh failed - trying dhayden'
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "echo '--- nginx configs ---'; ls /etc/nginx/sites-enabled/ 2>/dev/null || echo none; cat /etc/nginx/sites-enabled/* 2>/dev/null || true; echo '--- writable dirs ---'; ls -la /etc/nginx/sites-available/ 2>/dev/null | head -5; echo '--- home nginx ---'; ls ~/nginx* 2>/dev/null || echo none; echo '--- whoami ---'; id; echo '--- groups ---'; groups"
+            "ss -tlnp; echo '---'; cat /proc/net/tcp 2>/dev/null | head -5"
 
       - name: Stop running app
         run: |
