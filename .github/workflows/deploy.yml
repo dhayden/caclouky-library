@@ -64,13 +64,22 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p 2222 212.56.44.143 >> ~/.ssh/known_hosts
 
-      - name: Diagnose and configure
+      - name: Check nginx write access and root ssh
         run: |
-          ssh -i ~/.ssh/deploy_key -p 2222 -o StrictHostKeyChecking=no root@212.56.44.143 \
-            "echo 'ROOT ACCESS OK'; id; ss -tlnp | grep -E '80|8080'; ls /etc/nginx/sites-enabled/" \
-            && echo 'root ssh worked' || echo 'root ssh failed - trying dhayden'
-          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "ss -tlnp; echo '---'; cat /proc/net/tcp 2>/dev/null | head -5"
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 "
+            echo '--- nginx dir perms ---'
+            ls -la /etc/nginx/ 2>/dev/null || echo no-nginx
+            ls -la /etc/nginx/conf.d/ 2>/dev/null || echo no-conf-d
+            ls -la /etc/nginx/sites-available/ 2>/dev/null || echo no-sites-avail
+            echo '--- writable test ---'
+            touch /etc/nginx/conf.d/test 2>/dev/null && echo WRITABLE && rm /etc/nginx/conf.d/test || echo NOT-WRITABLE
+            echo '--- what is on port 80 ---'
+            ss -tlnp | grep ':80'
+            echo '--- nginx user ---'
+            ps aux | grep nginx | grep -v grep
+          "
+          echo '--- try root ssh ---'
+          ssh -i ~/.ssh/deploy_key -p 2222 -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@212.56.44.143 "id; ss -tlnp | grep :80" 2>&1 || echo 'root-ssh-failed'
 
       - name: Stop running app
         run: |
