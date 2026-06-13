@@ -150,7 +150,8 @@ using (var scope = app.Services.CreateScope())
                 }
 
                 Mark("20260324194846_InitialCreate");
-                Run(@"CREATE TABLE IF NOT EXISTS ""Books"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_Books"" PRIMARY KEY AUTOINCREMENT, ""ISBN"" TEXT NOT NULL, ""Title"" TEXT NOT NULL, ""Author"" TEXT NOT NULL, ""Publisher"" TEXT, ""PublishedYear"" INTEGER, ""Genre"" TEXT, ""Description"" TEXT, ""CoverImageUrl"" TEXT, ""TotalCopies"" INTEGER NOT NULL, ""AvailableCopies"" INTEGER NOT NULL, ""CreatedAt"" TEXT NOT NULL)");
+                Mark("20260330000458_AddIsRestrictedToBook");
+                Run(@"CREATE TABLE IF NOT EXISTS ""Books"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_Books"" PRIMARY KEY AUTOINCREMENT, ""ISBN"" TEXT NOT NULL, ""Title"" TEXT NOT NULL, ""Author"" TEXT NOT NULL, ""Publisher"" TEXT, ""PublishedYear"" INTEGER, ""Genre"" TEXT, ""Description"" TEXT, ""CoverImageUrl"" TEXT, ""TotalCopies"" INTEGER NOT NULL, ""AvailableCopies"" INTEGER NOT NULL, ""CreatedAt"" TEXT NOT NULL, ""IsRestricted"" INTEGER NOT NULL DEFAULT 0)");
                 Run(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Books_ISBN"" ON ""Books"" (""ISBN"")");
                 Run(@"CREATE TABLE IF NOT EXISTS ""Checkouts"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_Checkouts"" PRIMARY KEY AUTOINCREMENT, ""BookId"" INTEGER NOT NULL, ""UserId"" TEXT NOT NULL, ""CheckedOutAt"" TEXT NOT NULL, ""DueDate"" TEXT NOT NULL, ""ReturnedAt"" TEXT, ""LateFee"" TEXT, CONSTRAINT ""FK_Checkouts_Books_BookId"" FOREIGN KEY (""BookId"") REFERENCES ""Books"" (""Id"") ON DELETE CASCADE, CONSTRAINT ""FK_Checkouts_AspNetUsers_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""AspNetUsers"" (""Id"") ON DELETE CASCADE)");
                 Run(@"CREATE INDEX IF NOT EXISTS ""IX_Checkouts_BookId"" ON ""Checkouts"" (""BookId"")");
@@ -159,8 +160,6 @@ using (var scope = app.Services.CreateScope())
                 Run(@"CREATE INDEX IF NOT EXISTS ""IX_Reservations_BookId"" ON ""Reservations"" (""BookId"")");
                 Run(@"CREATE INDEX IF NOT EXISTS ""IX_Reservations_UserId"" ON ""Reservations"" (""UserId"")");
             }
-            // AddIsRestrictedToBook: mark applied if column already exists (EnsureCreated may have added it)
-            if (HasTable("Books") && HasCol("Books", "IsRestricted")) Mark("20260330000458_AddIsRestrictedToBook");
             // AddSermonSearch: mark applied if tables already exist
             if (HasTable("PdfDocuments")) Mark("20260415135840_AddSermonSearch");
 
