@@ -160,10 +160,10 @@ function splitHighlight(text: string, term: string): string[] {
 }
 
 function HighlightLine({ text, highlight, style }: { text: string; highlight?: string; style: StyleProp<TextStyle> }) {
-  if (!highlight?.trim()) return <Text style={style}>{text}</Text>;
+  if (!highlight?.trim()) return <Text style={style} selectable>{text}</Text>;
   const parts = splitHighlight(text, highlight);
   return (
-    <Text style={style}>
+    <Text style={style} selectable>
       {parts.map((p, i) =>
         p.toLowerCase() === highlight.toLowerCase()
           ? <Text key={i} style={{ backgroundColor: '#FFD700', color: '#000' }}>{p}</Text>
@@ -513,12 +513,8 @@ export default function GokScreen({ navigation, route }: Props) {
                     const isBookmark = hl?.color === 'bookmark';
                     const hlColor    = hl && !isBookmark ? hl.color : undefined;
                     return (
-                      <Pressable
+                      <View
                         key={i}
-                        delayLongPress={400}
-                        onLongPress={user ? () => setSectionAction({
-                          ref, date, title: s.sectionTitle, snippet: s.text.slice(0, 300),
-                        }) : undefined}
                         onLayout={e => {
                           if (
                             pendingScrollSection.current != null &&
@@ -532,14 +528,25 @@ export default function GokScreen({ navigation, route }: Props) {
                           ? { backgroundColor: hlColor + '28', borderLeftWidth: 3, borderLeftColor: hlColor }
                           : undefined}
                       >
-                        {(isBookmark || note) && (
-                          <View style={annStyles.badge}>
-                            {isBookmark && <Text style={annStyles.badgeIcon}>🔖</Text>}
+                        {/* Annotation button — tap to bookmark/highlight/note */}
+                        {user && (
+                          <TouchableOpacity
+                            style={annStyles.sectionAnnotateBtn}
+                            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                            onPress={() => setSectionAction({
+                              ref, date, title: s.sectionTitle, snippet: s.text.slice(0, 300),
+                            })}
+                          >
+                            <Ionicons
+                              name={hl ? 'bookmark' : 'bookmark-outline'}
+                              size={14}
+                              color={isBookmark ? '#f0b429' : hlColor ?? (c.textMuted + '99')}
+                            />
                             {note && <Text style={annStyles.badgeIcon}>📝</Text>}
-                          </View>
+                          </TouchableOpacity>
                         )}
                         <SectionBlock section={s} fontSize={f.body} highlight={highlightTerm || undefined} />
-                      </Pressable>
+                      </View>
                     );
                   })}
                   {/* Separator between sermons */}
@@ -801,8 +808,8 @@ const styles = StyleSheet.create({
 });
 
 const annStyles = StyleSheet.create({
-  badge:           { flexDirection: 'row', justifyContent: 'flex-end', paddingRight: 22, paddingTop: 2, gap: 4, marginBottom: 2 },
-  badgeIcon:       { fontSize: 13 },
+  sectionAnnotateBtn: { position: 'absolute', top: 2, right: 6, zIndex: 10, flexDirection: 'row', alignItems: 'center', gap: 2, padding: 4 },
+  badgeIcon:       { fontSize: 11 },
   sheetOverlay:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet:           { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 20, paddingBottom: 36, paddingHorizontal: 20 },
   noteSheet:       { paddingBottom: 48 },
