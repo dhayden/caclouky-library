@@ -227,9 +227,11 @@ export default function GokScreen({ navigation, route }: Props) {
   // UI state
   const [chooserOpen, setChooserOpen]   = useState(false);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
-  const scrollRef        = useRef<ScrollView>(null);
-  const coverHeight      = useRef(0);
-  const pendingScrollDate = useRef<string | null>(null);
+  const scrollRef               = useRef<ScrollView>(null);
+  const coverHeight             = useRef(0);
+  const pendingScrollDate       = useRef<string | null>(null);
+  const pendingScrollSection    = useRef<string | null>(null); // sectionTitle to scroll to
+  const pendingSectionOffsetY   = useRef<number | null>(null); // section Y within sermon View
 
   // Overlay animation
   const navShownRef = useRef(false);
@@ -279,11 +281,11 @@ export default function GokScreen({ navigation, route }: Props) {
   // ── React to search navigation params ────────────────────────────────────────
 
   useEffect(() => {
-    const { scrollToDate, highlight } = route.params ?? {};
+    const { scrollToDate, highlight, scrollToSectionTitle } = route.params ?? {};
     if (highlight !== undefined) setHighlightTerm(highlight);
-    if (scrollToDate && flatDates.length > 0) goToDate(scrollToDate, flatDates);
+    if (scrollToDate && flatDates.length > 0) goToDate(scrollToDate, flatDates, scrollToSectionTitle);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route.params?.scrollToDate, route.params?.highlight, flatDates]);
+  }, [route.params?.scrollToDate, route.params?.highlight, route.params?.scrollToSectionTitle, flatDates]);
 
   // ── Load more when near bottom ────────────────────────────────────────────────
 
@@ -317,21 +319,23 @@ export default function GokScreen({ navigation, route }: Props) {
 
   // ── Navigate to a specific date ───────────────────────────────────────────────
 
-  const goToDate = useCallback(async (date: string, dates: string[]) => {
+  const goToDate = useCallback(async (date: string, dates: string[], sectionTitle?: string | null) => {
     const idx = dates.indexOf(date);
     if (idx < 0) return;
 
-    // If already loaded, scroll to it
+    // If already loaded, scroll to it (sermon-level only — section offset not cached)
     const yPos = sermonYPositions.current.get(date);
     if (yPos !== undefined) {
       scrollRef.current?.scrollTo({ y: yPos, animated: true });
       return;
     }
 
-    // Otherwise: clear and reload from this date; onLayout will scroll once laid out
+    // Otherwise: clear and reload from this date; onLayout fires scroll once laid out
     setLoadedSermons([]);
     sermonYPositions.current.clear();
     pendingScrollDate.current = date;
+    pendingScrollSection.current = sectionTitle ?? null;
+    pendingSectionOffsetY.current = null;
     nextIndexRef.current = idx;
     await appendSermon(idx, dates);
   }, [appendSermon]);
@@ -391,7 +395,11 @@ export default function GokScreen({ navigation, route }: Props) {
                     sermonYPositions.current.set(date, y);
                     if (pendingScrollDate.current === date) {
                       pendingScrollDate.current = null;
-                      scrollRef.current?.scrollTo({ y, animated: false });
+                      // Add section offset if a specific section was captured by its onLayout
+                      const sectionOffset = pendingSectionOffsetY.current ?? 0;
+                      pendingSectionOffsetY.current = null;
+                      pendingScrollSection.current = null;
+                      scrollRef.current?.scrollTo({ y: y + sectionOffset, animated: false });
                     }
                   }}
                 >
@@ -399,7 +407,21 @@ export default function GokScreen({ navigation, route }: Props) {
                     {date}
                   </Text>
                   {sections.map((s, i) => (
-                    <SectionBlock key={i} section={s} fontSize={f.body} highlight={highlightTerm || undefined} />
+                    <View
+                      key={i}
+                      onLayout={e => {
+                        // Capture the first section whose title matches pendingScrollSection
+                        if (
+                          pendingScrollSection.current != null &&
+                          pendingScrollSection.current === s.sectionTitle &&
+                          pendingSectionOffsetY.current === null
+                        ) {
+                          pendingSectionOffsetY.current = e.nativeEvent.layout.y;
+                        }
+                      }}
+                    >
+                      <SectionBlock section={s} fontSize={f.body} highlight={highlightTerm || undefined} />
+                    </View>
                   ))}
                   {/* Separator between sermons */}
                   <View style={[styles.sermonSep, { borderTopColor: c.border }]} />

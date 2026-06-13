@@ -9,7 +9,7 @@ export type SermonStackParamList = {
 };
 
 export type GokStackParamList = {
-  GokHome: { scrollToDate?: string; highlight?: string } | undefined;
+  GokHome: { scrollToDate?: string; highlight?: string; scrollToSectionTitle?: string } | undefined;
   SermonSearch: undefined;
   PdfViewer: { fileName: string; page: number; title: string; highlight?: string };
 };

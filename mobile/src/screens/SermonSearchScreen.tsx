@@ -371,7 +371,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
                   <TouchableOpacity key={i} style={styles.textResult}
                     onPress={() => {
                       if (r.sermonDate) {
-                        navigation.navigate('GokHome', { scrollToDate: r.sermonDate, highlight: lastTextQuery });
+                        navigation.navigate('GokHome', { scrollToDate: r.sermonDate, highlight: lastTextQuery, scrollToSectionTitle: r.sectionTitle ?? undefined });
                       } else {
                         navigation.navigate('PdfViewer', { fileName: r.fileName, page: r.pageNumber, title, highlight: r.snippet });
                       }
@@ -406,7 +406,7 @@ export default function SermonSearchScreen({ navigation }: Props) {
                     <TouchableOpacity key={i} style={styles.textResult}
                       onPress={() => {
                         if (r.sermonDate) {
-                          navigation.navigate('GokHome', { scrollToDate: r.sermonDate, highlight: selectedTopic ?? undefined });
+                          navigation.navigate('GokHome', { scrollToDate: r.sermonDate, highlight: selectedTopic ?? undefined, scrollToSectionTitle: r.sectionTitle ?? undefined });
                         } else {
                           navigation.navigate('PdfViewer', { fileName: r.fileName, page: r.pageNumber, title: dateLabel, highlight: r.snippet });
                         }
