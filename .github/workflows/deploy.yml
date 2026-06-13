@@ -44,8 +44,6 @@ jobs:
         run: |
           mkdir -p api/wwwroot
           cp -r web/caclouky-react/dist/. api/wwwroot/
-          mkdir -p api/wwwroot/mobile
-          cp -r mobile/dist/. api/wwwroot/mobile/
 
       # ── Build & Publish .NET API ───────────────────────────────────────────
       - uses: actions/setup-dotnet@v4
@@ -55,6 +53,12 @@ jobs:
       - name: Publish API (linux-x64)
         working-directory: api
         run: dotnet publish -c Release -r linux-x64 --self-contained false -o ../publish
+
+      # Copy mobile dist after publish so node_modules assets aren't excluded by .NET SDK
+      - name: Copy mobile dist to publish
+        run: |
+          mkdir -p publish/wwwroot/mobile
+          cp -r mobile/dist/. publish/wwwroot/mobile/
 
       # ── Deploy to server ───────────────────────────────────────────────────
       - name: Write SSH key

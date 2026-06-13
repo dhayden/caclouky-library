@@ -21,6 +21,8 @@ mobile/.expo/
 
 # Sermon PDFs (large binary files — stored on server, not in git)
 api/sermon-pdfs/
+# GoK4.html is large but tracked so CI can deploy it
+!api/sermon-pdfs/GoK4.html
 
 # General
 .DS_Store

@@ -6,6 +6,9 @@
     <RootNamespace>CacloukyLibrary</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="sermon-pdfs/GoK4.html" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.11.*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.5" />
