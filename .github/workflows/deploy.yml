@@ -85,8 +85,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 "
             cd ~/caclouky
             export Jwt__Key='${{ secrets.JWT_KEY }}'
-            export Jwt__Issuer='https://212.56.44.143:6000'
-            export Jwt__Audience='https://212.56.44.143:6000'
+            export Jwt__Issuer='https://212.56.44.143:8080'
+            export Jwt__Audience='https://212.56.44.143:8080'
             export Ollama__BaseUrl='http://localhost:11434'
             export Ollama__Model='nomic-embed-text'
             export Ollama__ChatModel='llama3.2'
@@ -114,4 +114,4 @@ jobs:
             fi
           "
           echo '--- external connectivity check ---'
-          curl -sk --max-time 10 https://212.56.44.143:6000 -o /dev/null -w '%{http_code}\n' && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE'
+          curl -sk --max-time 10 https://212.56.44.143:8080 -o /dev/null -w '%{http_code}\n' && echo 'EXTERNAL OK' || echo 'EXTERNAL UNREACHABLE'
