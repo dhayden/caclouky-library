@@ -227,8 +227,9 @@ export default function GokScreen({ navigation, route }: Props) {
   // UI state
   const [chooserOpen, setChooserOpen]   = useState(false);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
-  const scrollRef   = useRef<ScrollView>(null);
-  const coverHeight = useRef(0);
+  const scrollRef        = useRef<ScrollView>(null);
+  const coverHeight      = useRef(0);
+  const pendingScrollDate = useRef<string | null>(null);
 
   // Overlay animation
   const navShownRef = useRef(false);
@@ -327,15 +328,12 @@ export default function GokScreen({ navigation, route }: Props) {
       return;
     }
 
-    // Otherwise: clear and reload from this date
+    // Otherwise: clear and reload from this date; onLayout will scroll once laid out
     setLoadedSermons([]);
     sermonYPositions.current.clear();
+    pendingScrollDate.current = date;
     nextIndexRef.current = idx;
     await appendSermon(idx, dates);
-    // Scroll to top of content (which is now that sermon, below cover)
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: coverHeight.current, animated: false });
-    }, 150);
   }, [appendSermon]);
 
   // ── Prev / Next ───────────────────────────────────────────────────────────────
@@ -389,7 +387,12 @@ export default function GokScreen({ navigation, route }: Props) {
                 <View
                   key={date}
                   onLayout={e => {
-                    sermonYPositions.current.set(date, e.nativeEvent.layout.y);
+                    const y = e.nativeEvent.layout.y;
+                    sermonYPositions.current.set(date, y);
+                    if (pendingScrollDate.current === date) {
+                      pendingScrollDate.current = null;
+                      scrollRef.current?.scrollTo({ y, animated: false });
+                    }
                   }}
                 >
                   <Text style={[styles.dateHeading, { color: c.textPrimary, fontSize: f.heading + 2 }]}>

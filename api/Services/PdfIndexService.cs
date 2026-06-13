@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using CacloukyLibrary.Data;
 using CacloukyLibrary.Models;
 using HtmlAgilityPack;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using PdfPig = UglyToad.PdfPig.PdfDocument;
 
@@ -70,6 +71,39 @@ public class PdfIndexService
 
         await IndexDocumentAsync(doc, sections);
         return doc;
+    }
+
+    public async Task IndexGoK4IfNeededAsync()
+    {
+        var filePath = Path.Combine(_storageDir, "GoK4.html");
+        if (!File.Exists(filePath)) return;
+
+        var existing = await _db.PdfDocuments.FirstOrDefaultAsync(d => d.FileName == "GoK4.html");
+        if (existing?.IsIndexed == true) return;
+
+        var sections = ExtractHtmlSections(filePath);
+        if (sections.Count == 0) return;
+
+        if (existing == null)
+        {
+            existing = new PdfDocument
+            {
+                Title      = "Gospel of the Kingdom Papers",
+                FileName   = "GoK4.html",
+                PageCount  = sections.Count,
+                UploadedAt = DateTime.UtcNow
+            };
+            _db.PdfDocuments.Add(existing);
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            var old = _db.PdfChunks.Where(c => c.DocumentId == existing.Id);
+            _db.PdfChunks.RemoveRange(old);
+            await _db.SaveChangesAsync();
+        }
+
+        await IndexDocumentAsync(existing, sections);
     }
 
     public async Task ReindexAsync(int documentId)

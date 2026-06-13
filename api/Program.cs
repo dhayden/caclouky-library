@@ -274,6 +274,15 @@ using (var scope = app.Services.CreateScope())
             await svc.SeedAsync();
         });
     }
+
+    // ── Index GoK4.html for AI search (no-op if already indexed) ─────────────
+    _ = Task.Run(async () =>
+    {
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        using var idxScope = app.Services.CreateScope();
+        var svc = idxScope.ServiceProvider.GetRequiredService<CacloukyLibrary.Services.PdfIndexService>();
+        await svc.IndexGoK4IfNeededAsync();
+    });
 }
 
 if (app.Environment.IsDevelopment())
