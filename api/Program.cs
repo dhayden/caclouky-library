@@ -135,18 +135,13 @@ using (var scope = app.Services.CreateScope())
             // InitialCreate: identity tables exist but Books/Checkouts/Reservations may be missing
             if (HasTable("AspNetUsers"))
             {
-                // If Books was created by old EF Core migration without AUTOINCREMENT, rebuild it.
-                // These tables have no data (seeding always crashed before this run), so DROP is safe.
-                if (HasTable("Books"))
+                // If Books is missing IsRestricted, it was created by an old/incomplete bootstrap run.
+                // These tables have no data (seeding always crashed), so DROP is safe.
+                if (HasTable("Books") && !HasCol("Books", "IsRestricted"))
                 {
-                    cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='Books'";
-                    var booksSql = (string?)cmd.ExecuteScalar() ?? "";
-                    if (!booksSql.Contains("AUTOINCREMENT", StringComparison.OrdinalIgnoreCase))
-                    {
-                        Run(@"DROP TABLE IF EXISTS ""Reservations""");
-                        Run(@"DROP TABLE IF EXISTS ""Checkouts""");
-                        Run(@"DROP TABLE ""Books""");
-                    }
+                    Run(@"DROP TABLE IF EXISTS ""Reservations""");
+                    Run(@"DROP TABLE IF EXISTS ""Checkouts""");
+                    Run(@"DROP TABLE ""Books""");
                 }
 
                 Mark("20260324194846_InitialCreate");
