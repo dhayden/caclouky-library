@@ -69,8 +69,8 @@ jobs:
 
       - name: Stop running app
         run: |
-          ssh -v -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
-            "if [ -f ~/caclouky/app.pid ]; then kill \$(cat ~/caclouky/app.pid) 2>/dev/null || true; rm ~/caclouky/app.pid; fi; pkill -f 'http.server 8000' 2>/dev/null || true; echo stopped"
+          ssh -i ~/.ssh/deploy_key -p 2222 dhayden@212.56.44.143 \
+            "if [ -f ~/caclouky/app.pid ]; then kill \$(cat ~/caclouky/app.pid) 2>/dev/null || true; rm ~/caclouky/app.pid; fi; pkill -f '[h]ttp.server 8000' 2>/dev/null || true; echo stopped"
 
       - name: Copy files to server
         run: |
