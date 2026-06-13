@@ -38,8 +38,8 @@ namespace CacloukyLibrary.Migrations
                     DocumentId = table.Column<int>(type: "int", nullable: false),
                     PageNumber = table.Column<int>(type: "int", nullable: false),
                     ChunkIndex = table.Column<int>(type: "int", nullable: false),
-                    Content = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Embedding = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Content = table.Column<string>(type: "TEXT", nullable: false),
+                    Embedding = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
