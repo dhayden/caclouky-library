@@ -135,6 +135,20 @@ using (var scope = app.Services.CreateScope())
             // InitialCreate: identity tables exist but Books/Checkouts/Reservations may be missing
             if (HasTable("AspNetUsers"))
             {
+                // If Books was created by old EF Core migration without AUTOINCREMENT, rebuild it.
+                // These tables have no data (seeding always crashed before this run), so DROP is safe.
+                if (HasTable("Books"))
+                {
+                    cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='Books'";
+                    var booksSql = (string?)cmd.ExecuteScalar() ?? "";
+                    if (!booksSql.Contains("AUTOINCREMENT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Run(@"DROP TABLE IF EXISTS ""Reservations""");
+                        Run(@"DROP TABLE IF EXISTS ""Checkouts""");
+                        Run(@"DROP TABLE ""Books""");
+                    }
+                }
+
                 Mark("20260324194846_InitialCreate");
                 Run(@"CREATE TABLE IF NOT EXISTS ""Books"" (""Id"" INTEGER NOT NULL CONSTRAINT ""PK_Books"" PRIMARY KEY AUTOINCREMENT, ""ISBN"" TEXT NOT NULL, ""Title"" TEXT NOT NULL, ""Author"" TEXT NOT NULL, ""Publisher"" TEXT, ""PublishedYear"" INTEGER, ""Genre"" TEXT, ""Description"" TEXT, ""CoverImageUrl"" TEXT, ""TotalCopies"" INTEGER NOT NULL, ""AvailableCopies"" INTEGER NOT NULL, ""CreatedAt"" TEXT NOT NULL)");
                 Run(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Books_ISBN"" ON ""Books"" (""ISBN"")");
