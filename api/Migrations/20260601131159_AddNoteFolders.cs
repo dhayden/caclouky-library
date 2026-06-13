@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -21,7 +21,7 @@ namespace CacloukyLibrary.Migrations
                 columns: table => new
                 {
                     Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
+                        .Annotation("SqlServer:Identity", "1, 1").Annotation("Sqlite:Autoincrement", true),
                     UserId = table.Column<string>(nullable: false),
                     Name = table.Column<string>(maxLength: 200, nullable: false),
                     Color = table.Column<string>(nullable: true),

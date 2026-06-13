@@ -16,7 +16,7 @@ namespace CacloukyLibrary.Migrations
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
+                        .Annotation("SqlServer:Identity", "1, 1").Annotation("Sqlite:Autoincrement", true),
                     Title = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     FileName = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     PageCount = table.Column<int>(type: "int", nullable: false),
@@ -34,7 +34,7 @@ namespace CacloukyLibrary.Migrations
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
+                        .Annotation("SqlServer:Identity", "1, 1").Annotation("Sqlite:Autoincrement", true),
                     DocumentId = table.Column<int>(type: "int", nullable: false),
                     PageNumber = table.Column<int>(type: "int", nullable: false),
                     ChunkIndex = table.Column<int>(type: "int", nullable: false),

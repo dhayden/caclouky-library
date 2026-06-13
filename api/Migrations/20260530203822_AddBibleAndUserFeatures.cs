@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -16,7 +16,7 @@ namespace CacloukyLibrary.Migrations
                 columns: table => new
                 {
                     Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
+                        .Annotation("SqlServer:Identity", "1, 1").Annotation("Sqlite:Autoincrement", true),
                     BookNumber = table.Column<int>(nullable: false),
                     Book = table.Column<string>(nullable: false),
                     Chapter = table.Column<int>(nullable: false),
@@ -33,7 +33,7 @@ namespace CacloukyLibrary.Migrations
                 columns: table => new
                 {
                     Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
+                        .Annotation("SqlServer:Identity", "1, 1").Annotation("Sqlite:Autoincrement", true),
                     UserId = table.Column<string>(nullable: false),
                     Query = table.Column<string>(nullable: false),
                     Type = table.Column<string>(nullable: false),
@@ -49,7 +49,7 @@ namespace CacloukyLibrary.Migrations
                 columns: table => new
                 {
                     Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
+                        .Annotation("SqlServer:Identity", "1, 1").Annotation("Sqlite:Autoincrement", true),
                     UserId = table.Column<string>(nullable: false),
                     SourceType = table.Column<string>(nullable: false),
                     SourceRef = table.Column<string>(nullable: false),
@@ -67,7 +67,7 @@ namespace CacloukyLibrary.Migrations
                 columns: table => new
                 {
                     Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
+                        .Annotation("SqlServer:Identity", "1, 1").Annotation("Sqlite:Autoincrement", true),
                     UserId = table.Column<string>(nullable: false),
                     Title = table.Column<string>(nullable: false),
                     Content = table.Column<string>(nullable: false),
