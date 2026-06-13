@@ -2,17 +2,31 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable,
   StyleSheet, Modal, ActivityIndicator, Platform, Animated, Dimensions,
+  TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import type { StyleProp, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { GokTocYear, GokSection } from '../types';
+import type { GokTocYear, GokSection, UserHighlight, UserNote } from '../types';
 import * as api from '../api';
+import { useAuth } from '../context/AuthContext';
 import { useDisplay } from '../context/DisplayContext';
 import type { GokStackParamList } from '../navigation/types';
 
 type NavLevel = 'collection' | 'year' | 'dates';
+
+const HIGHLIGHT_COLORS = [
+  { color: '#FFD700', label: 'Yellow' },
+  { color: '#90EE90', label: 'Green' },
+  { color: '#87CEEB', label: 'Blue' },
+  { color: '#FFB6C1', label: 'Pink' },
+];
+
+// Stable ref key: prefer section title, fall back to index
+function makeRef(date: string, sectionTitle: string | null, idx: number) {
+  return `${date}::${sectionTitle ?? String(idx)}`;
+}
 
 // ── Go-To Chooser ─────────────────────────────────────────────────────────────
 
@@ -192,9 +206,10 @@ function SectionBlock({ section, fontSize, highlight }: { section: GokSection; f
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type LoadedSermon = { date: string; sections: GokSection[] };
+type SectionAction = { ref: string; date: string; title: string | null; snippet: string };
 
 const FONT_SIZES = ['small', 'medium', 'large'] as const;
-const LOAD_AHEAD_PX = 600; // start loading next sermon when this many px from bottom
+const LOAD_AHEAD_PX = 600;
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -205,6 +220,7 @@ export default function GokScreen({ navigation, route }: Props) {
   const c = theme.colors;
   const f = theme.font;
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   // TOC state
   const [toc, setToc]             = useState<GokTocYear[]>([]);
@@ -214,30 +230,119 @@ export default function GokScreen({ navigation, route }: Props) {
   // Continuous reader state
   const [loadedSermons, setLoadedSermons] = useState<LoadedSermon[]>([]);
   const [loadingMore, setLoadingMore]     = useState(false);
-  const nextIndexRef = useRef(0); // index in flatDates of next sermon to append
+  const nextIndexRef = useRef(0);
 
   // Visible sermon tracking
   const [currentVisibleDate, setCurrentVisibleDate] = useState<string | null>(null);
-  const sermonYPositions = useRef<Map<string, number>>(new Map()); // date → Y in scroll content
+  const sermonYPositions = useRef<Map<string, number>>(new Map());
   const scrollYRef = useRef(0);
 
   // Highlight term from search navigation
   const [highlightTerm, setHighlightTerm] = useState('');
 
+  // Annotations (highlights, bookmarks, notes)
+  const [gokHighlights, setGokHighlights] = useState<Map<string, UserHighlight>>(new Map());
+  const [gokNotes,      setGokNotes]      = useState<Map<string, UserNote>>(new Map());
+  const [sectionAction, setSectionAction] = useState<SectionAction | null>(null);
+  const [noteModal,     setNoteModal]     = useState<{ ref: string; existing?: UserNote } | null>(null);
+  const [noteTitle,   setNoteTitle]   = useState('');
+  const [noteContent, setNoteContent] = useState('');
+
   // UI state
-  const [chooserOpen, setChooserOpen]   = useState(false);
+  const [chooserOpen, setChooserOpen]       = useState(false);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
-  const scrollRef               = useRef<ScrollView>(null);
-  const coverHeight             = useRef(0);
-  const pendingScrollDate       = useRef<string | null>(null);
-  const pendingScrollSection    = useRef<string | null>(null); // sectionTitle to scroll to
-  const pendingSectionOffsetY   = useRef<number | null>(null); // section Y within sermon View
+  const scrollRef             = useRef<ScrollView>(null);
+  const coverHeight           = useRef(0);
+  const pendingScrollDate     = useRef<string | null>(null);
+  const pendingScrollSection  = useRef<string | null>(null);
+  const pendingSectionOffsetY = useRef<number | null>(null);
 
   // Overlay animation
   const navShownRef = useRef(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const [navShown, setNavShown] = useState(false);
 
+  // ── Load annotations ──────────────────────────────────────────────────────────
+
+  const loadAnnotations = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [hlRes, ntRes] = await Promise.all([
+        api.getHighlights('gok'),
+        api.getNotes(),
+      ]);
+      setGokHighlights(new Map(hlRes.data.map(h => [h.sourceRef, h])));
+      setGokNotes(new Map(
+        ntRes.data
+          .filter(n => n.sourceType === 'gok' && n.sourceRef)
+          .map(n => [n.sourceRef!, n])
+      ));
+    } catch {}
+  }, [user]);
+
+  useEffect(() => { loadAnnotations(); }, [loadAnnotations]);
+
+  // ── Annotation actions ────────────────────────────────────────────────────────
+
+  const doHighlight = async (color: string) => {
+    if (!sectionAction || !user) return;
+    const existing = gokHighlights.get(sectionAction.ref);
+    if (existing) {
+      await api.deleteHighlight(existing.id).catch(() => {});
+      if (existing.color === color) {
+        // Toggle off: same color tapped again
+        setGokHighlights(m => { const n = new Map(m); n.delete(sectionAction.ref); return n; });
+        setSectionAction(null);
+        return;
+      }
+    }
+    try {
+      const res = await api.createHighlight('gok', sectionAction.ref, sectionAction.snippet, color);
+      setGokHighlights(m => new Map(m).set(sectionAction.ref, res.data));
+    } catch {}
+    setSectionAction(null);
+  };
+
+  const removeAnnotation = async () => {
+    if (!sectionAction) return;
+    const hl = gokHighlights.get(sectionAction.ref);
+    if (hl) {
+      await api.deleteHighlight(hl.id).catch(() => {});
+      setGokHighlights(m => { const n = new Map(m); n.delete(sectionAction.ref); return n; });
+    }
+    setSectionAction(null);
+  };
+
+  const openNoteModal = (ref: string, date: string, existing?: UserNote) => {
+    setNoteTitle(existing?.title ?? date);
+    setNoteContent(existing?.content ?? '');
+    setNoteModal({ ref, existing });
+    setSectionAction(null);
+  };
+
+  const saveNote = async () => {
+    if (!noteModal || !user) return;
+    const title = noteTitle.trim() || 'GoK Note';
+    const data = { title, content: noteContent, sourceType: 'gok', sourceRef: noteModal.ref };
+    try {
+      if (noteModal.existing) {
+        const res = await api.updateNote(noteModal.existing.id, data);
+        setGokNotes(m => new Map(m).set(noteModal.ref, res.data));
+      } else {
+        const res = await api.createNote(data);
+        setGokNotes(m => new Map(m).set(noteModal.ref, res.data));
+      }
+    } catch {}
+    setNoteModal(null);
+  };
+
+  const deleteNote = async (ref: string) => {
+    const note = gokNotes.get(ref);
+    if (!note) return;
+    await api.deleteNote(note.id).catch(() => {});
+    setGokNotes(m => { const n = new Map(m); n.delete(ref); return n; });
+    setSectionAction(null);
+  };
 
   // ── Load a single sermon and append ──────────────────────────────────────────
 
@@ -247,7 +352,7 @@ export default function GokScreen({ navigation, route }: Props) {
     try {
       const res = await api.getGokSermon(date);
       setLoadedSermons(prev => {
-        if (prev.some(s => s.date === date)) return prev; // already loaded
+        if (prev.some(s => s.date === date)) return prev;
         return [...prev, { date, sections: res.data.sections }];
       });
       nextIndexRef.current = index + 1;
@@ -305,7 +410,6 @@ export default function GokScreen({ navigation, route }: Props) {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     scrollYRef.current = contentOffset.y;
 
-    // Update visible sermon date
     let visible: string | null = null;
     for (const [date, yPos] of sermonYPositions.current) {
       if (yPos <= contentOffset.y + 80) visible = date;
@@ -313,7 +417,6 @@ export default function GokScreen({ navigation, route }: Props) {
     }
     setCurrentVisibleDate(visible);
 
-    // Load more near bottom
     maybeLoadMore(contentSize.height, layoutMeasurement.height, contentOffset.y);
   }, [maybeLoadMore]);
 
@@ -323,14 +426,12 @@ export default function GokScreen({ navigation, route }: Props) {
     const idx = dates.indexOf(date);
     if (idx < 0) return;
 
-    // If already loaded, scroll to it (sermon-level only — section offset not cached)
     const yPos = sermonYPositions.current.get(date);
     if (yPos !== undefined) {
       scrollRef.current?.scrollTo({ y: yPos, animated: true });
       return;
     }
 
-    // Otherwise: clear and reload from this date; onLayout fires scroll once laid out
     setLoadedSermons([]);
     sermonYPositions.current.clear();
     pendingScrollDate.current = date;
@@ -380,7 +481,7 @@ export default function GokScreen({ navigation, route }: Props) {
           {/* Divider */}
           <View style={[styles.divider, { borderTopColor: c.border }]} />
 
-          {/* Loaded sermons — appended as user scrolls */}
+          {/* Loaded sermons */}
           {tocLoading ? (
             <View style={styles.centered}>
               <ActivityIndicator size="large" color={c.primary} />
@@ -395,7 +496,6 @@ export default function GokScreen({ navigation, route }: Props) {
                     sermonYPositions.current.set(date, y);
                     if (pendingScrollDate.current === date) {
                       pendingScrollDate.current = null;
-                      // Add section offset if a specific section was captured by its onLayout
                       const sectionOffset = pendingSectionOffsetY.current ?? 0;
                       pendingSectionOffsetY.current = null;
                       pendingScrollSection.current = null;
@@ -406,23 +506,42 @@ export default function GokScreen({ navigation, route }: Props) {
                   <Text style={[styles.dateHeading, { color: c.textPrimary, fontSize: f.heading + 2 }]}>
                     {date}
                   </Text>
-                  {sections.map((s, i) => (
-                    <View
-                      key={i}
-                      onLayout={e => {
-                        // Capture the first section whose title matches pendingScrollSection
-                        if (
-                          pendingScrollSection.current != null &&
-                          pendingScrollSection.current === s.sectionTitle &&
-                          pendingSectionOffsetY.current === null
-                        ) {
-                          pendingSectionOffsetY.current = e.nativeEvent.layout.y;
-                        }
-                      }}
-                    >
-                      <SectionBlock section={s} fontSize={f.body} highlight={highlightTerm || undefined} />
-                    </View>
-                  ))}
+                  {sections.map((s, i) => {
+                    const ref = makeRef(date, s.sectionTitle, i);
+                    const hl  = gokHighlights.get(ref);
+                    const note = gokNotes.get(ref);
+                    const isBookmark = hl?.color === 'bookmark';
+                    const hlColor    = hl && !isBookmark ? hl.color : undefined;
+                    return (
+                      <Pressable
+                        key={i}
+                        delayLongPress={400}
+                        onLongPress={user ? () => setSectionAction({
+                          ref, date, title: s.sectionTitle, snippet: s.text.slice(0, 300),
+                        }) : undefined}
+                        onLayout={e => {
+                          if (
+                            pendingScrollSection.current != null &&
+                            pendingScrollSection.current === s.sectionTitle &&
+                            pendingSectionOffsetY.current === null
+                          ) {
+                            pendingSectionOffsetY.current = e.nativeEvent.layout.y;
+                          }
+                        }}
+                        style={hlColor
+                          ? { backgroundColor: hlColor + '28', borderLeftWidth: 3, borderLeftColor: hlColor }
+                          : undefined}
+                      >
+                        {(isBookmark || note) && (
+                          <View style={annStyles.badge}>
+                            {isBookmark && <Text style={annStyles.badgeIcon}>🔖</Text>}
+                            {note && <Text style={annStyles.badgeIcon}>📝</Text>}
+                          </View>
+                        )}
+                        <SectionBlock section={s} fontSize={f.body} highlight={highlightTerm || undefined} />
+                      </Pressable>
+                    );
+                  })}
                   {/* Separator between sermons */}
                   <View style={[styles.sermonSep, { borderTopColor: c.border }]} />
                 </View>
@@ -512,6 +631,141 @@ export default function GokScreen({ navigation, route }: Props) {
         onSelect={date => goToDate(date, flatDates)}
         onClose={() => setChooserOpen(false)}
       />
+
+      {/* ── Section action sheet ───────────────────────────────────────────────── */}
+      <Modal
+        visible={sectionAction !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSectionAction(null)}
+      >
+        <Pressable style={annStyles.sheetOverlay} onPress={() => setSectionAction(null)}>
+          <Pressable style={[annStyles.sheet, { backgroundColor: c.surface }]}>
+            <Text style={[annStyles.sheetTitle, { color: c.textPrimary }]} numberOfLines={2}>
+              {sectionAction?.title ?? sectionAction?.date ?? 'Section'}
+            </Text>
+
+            {/* Highlight colors */}
+            <Text style={[annStyles.sheetLabel, { color: c.textSecondary }]}>HIGHLIGHT</Text>
+            <View style={annStyles.colorRow}>
+              {HIGHLIGHT_COLORS.map(({ color }) => {
+                const active = sectionAction != null && gokHighlights.get(sectionAction.ref)?.color === color;
+                return (
+                  <TouchableOpacity
+                    key={color}
+                    style={[annStyles.colorSwatch, { backgroundColor: color }, active && annStyles.colorActive]}
+                    onPress={() => doHighlight(color)}
+                  >
+                    {active && <Ionicons name="checkmark" size={16} color="#333" />}
+                  </TouchableOpacity>
+                );
+              })}
+              {/* Bookmark swatch */}
+              {(() => {
+                const isBookmark = sectionAction != null && gokHighlights.get(sectionAction.ref)?.color === 'bookmark';
+                return (
+                  <TouchableOpacity
+                    style={[annStyles.colorSwatch, { backgroundColor: c.primary + '22' }, isBookmark && annStyles.colorActive]}
+                    onPress={() => doHighlight('bookmark')}
+                  >
+                    <Text style={{ fontSize: 18, lineHeight: 22 }}>🔖</Text>
+                  </TouchableOpacity>
+                );
+              })()}
+            </View>
+
+            {/* Remove highlight / bookmark */}
+            {sectionAction != null && gokHighlights.has(sectionAction.ref) && (
+              <TouchableOpacity style={[annStyles.sheetRow, { borderTopColor: c.border }]} onPress={removeAnnotation}>
+                <Ionicons name="trash-outline" size={18} color="#E57373" />
+                <Text style={[annStyles.sheetRowText, { color: '#E57373' }]}>
+                  Remove {gokHighlights.get(sectionAction.ref)?.color === 'bookmark' ? 'Bookmark' : 'Highlight'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Add / edit note */}
+            <TouchableOpacity
+              style={[annStyles.sheetRow, { borderTopColor: c.border }]}
+              onPress={() => {
+                if (sectionAction) {
+                  openNoteModal(sectionAction.ref, sectionAction.date, gokNotes.get(sectionAction.ref));
+                }
+              }}
+            >
+              <Ionicons name="create-outline" size={18} color={c.primary} />
+              <Text style={[annStyles.sheetRowText, { color: c.primary }]}>
+                {sectionAction != null && gokNotes.has(sectionAction.ref) ? 'Edit Note' : 'Add Note'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Delete note */}
+            {sectionAction != null && gokNotes.has(sectionAction.ref) && (
+              <TouchableOpacity
+                style={[annStyles.sheetRow, { borderTopColor: c.border }]}
+                onPress={() => { if (sectionAction) deleteNote(sectionAction.ref); }}
+              >
+                <Ionicons name="trash-outline" size={18} color="#E57373" />
+                <Text style={[annStyles.sheetRowText, { color: '#E57373' }]}>Delete Note</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={annStyles.sheetCancel} onPress={() => setSectionAction(null)}>
+              <Text style={[annStyles.sheetCancelText, { color: c.textMuted }]}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Note editor ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={noteModal !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNoteModal(null)}
+      >
+        <KeyboardAvoidingView
+          style={annStyles.sheetOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={[annStyles.sheet, annStyles.noteSheet, { backgroundColor: c.surface }]}>
+            <Text style={[annStyles.sheetTitle, { color: c.textPrimary }]}>
+              {noteModal?.existing ? 'Edit Note' : 'Add Note'}
+            </Text>
+            <TextInput
+              style={[annStyles.noteInput, annStyles.noteTitleInput, { color: c.textPrimary, borderColor: c.border, backgroundColor: c.background }]}
+              placeholder="Title"
+              placeholderTextColor={c.textMuted}
+              value={noteTitle}
+              onChangeText={setNoteTitle}
+              returnKeyType="next"
+            />
+            <TextInput
+              style={[annStyles.noteInput, annStyles.noteBodyInput, { color: c.textPrimary, borderColor: c.border, backgroundColor: c.background }]}
+              placeholder="Your note…"
+              placeholderTextColor={c.textMuted}
+              value={noteContent}
+              onChangeText={setNoteContent}
+              multiline
+              textAlignVertical="top"
+            />
+            <View style={annStyles.noteActions}>
+              <TouchableOpacity
+                style={[annStyles.noteBtn, { borderColor: c.border }]}
+                onPress={() => setNoteModal(null)}
+              >
+                <Text style={{ color: c.textSecondary }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[annStyles.noteBtn, { backgroundColor: c.primary, borderColor: c.primary }]}
+                onPress={saveNote}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -544,4 +798,26 @@ const styles = StyleSheet.create({
   footerArrow:     { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, paddingVertical: 10 },
   arrowLabel:      { fontSize: 13 },
   footerInfo:      { flex: 1, textAlign: 'center', fontSize: 12, letterSpacing: 0.2 },
+});
+
+const annStyles = StyleSheet.create({
+  badge:           { flexDirection: 'row', justifyContent: 'flex-end', paddingRight: 22, paddingTop: 2, gap: 4, marginBottom: 2 },
+  badgeIcon:       { fontSize: 13 },
+  sheetOverlay:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet:           { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 20, paddingBottom: 36, paddingHorizontal: 20 },
+  noteSheet:       { paddingBottom: 48 },
+  sheetTitle:      { fontSize: 15, fontWeight: '700', marginBottom: 18 },
+  sheetLabel:      { fontSize: 11, fontWeight: '700', letterSpacing: 1.2, marginBottom: 12 },
+  colorRow:        { flexDirection: 'row', gap: 14, marginBottom: 20 },
+  colorSwatch:     { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  colorActive:     { borderColor: '#555', transform: [{ scale: 1.18 }] },
+  sheetRow:        { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  sheetRowText:    { fontSize: 15, fontWeight: '500' },
+  sheetCancel:     { marginTop: 10, alignItems: 'center', paddingVertical: 10 },
+  sheetCancelText: { fontSize: 15 },
+  noteInput:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12 },
+  noteTitleInput:  { fontSize: 15, height: 46 },
+  noteBodyInput:   { fontSize: 14, minHeight: 130, paddingTop: 10 },
+  noteActions:     { flexDirection: 'row', gap: 12, justifyContent: 'flex-end', marginTop: 4 },
+  noteBtn:         { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 8, borderWidth: 1 },
 });
